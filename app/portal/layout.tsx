@@ -1,0 +1,476 @@
+"use client"
+
+import React, { useState, useEffect } from "react"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
+import {
+  Sparkles,
+  FileText,
+  CalendarClock,
+  Package,
+  Boxes,
+  Wrench,
+  Truck,
+  CheckCircle,
+  BarChart3,
+  LogOut,
+  Menu,
+  X,
+  ChevronLeft,
+  ChevronDown,
+  AlertTriangle,
+  Settings,
+  Map,
+} from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import type { UserRole } from "@/lib/types"
+import { getCurrentRole, setCurrentRole, getAllowedPagesForRole } from "@/lib/role-storage"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import SettingsBootstrap from "@/components/portal/SettingsBootstrap"
+
+type SidebarLinkItem = {
+  title: string
+  href: string
+  icon: React.ElementType
+}
+
+type SidebarGroupItem = {
+  title: string
+  icon: React.ElementType
+  children: SidebarLinkItem[]
+}
+
+type SidebarItem = SidebarLinkItem | SidebarGroupItem
+
+const sidebarItems: SidebarItem[] = [
+  {
+    title: "Dashboard",
+    icon: BarChart3,
+    children: [
+      {
+        title: "Status Tracking",
+        href: "/portal/status-tracking",
+        icon: BarChart3,
+      },
+      {
+        title: "Mapping",
+        href: "/portal/mapping",
+        icon: Map,
+      },
+    ],
+  },
+  {
+    title: "Sales Order",
+    href: "/portal/sales-order",
+    icon: FileText,
+  },
+  {
+    title: "Ad Hoc Order",
+    href: "/portal/ad-hoc",
+    icon: Sparkles,
+  },
+  {
+    title: "Scheduling",
+    href: "/portal/scheduling",
+    icon: CalendarClock,
+  },
+  {
+    title: "Packing",
+    href: "/portal/packing",
+    icon: Package,
+  },
+  {
+    title: "Setting Up",
+    href: "/portal/setting-up",
+    icon: Wrench,
+  },
+  {
+    title: "Dismantle",
+    href: "/portal/dismantle",
+    icon: Truck,
+  },
+  {
+    title: "Other Adhoc",
+    href: "/portal/other-adhoc",
+    icon: Sparkles,
+  },
+  {
+    title: "Completed",
+    href: "/portal/completed",
+    icon: CheckCircle,
+  },
+  {
+    title: "Warning & Issues",
+    href: "/portal/warnings",
+    icon: AlertTriangle,
+  },
+  {
+    title: "Inventory",
+    href: "/portal/inventory",
+    icon: Boxes,
+  },
+  {
+    title: "Settings",
+    icon: Settings,
+    children: [
+      {
+        title: "Application Settings",
+        href: "/portal/settings?tab=application",
+        icon: Settings,
+      },
+      {
+        title: "Instruction",
+        href: "/portal/settings?tab=instruction",
+        icon: FileText,
+      },
+    ],
+  },
+]
+
+const isGroupItem = (item: SidebarItem): item is SidebarGroupItem =>
+  "children" in item
+
+export default function PortalLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const [mounted, setMounted] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [currentRole, setCurrentRoleState] = useState<UserRole>("User")
+  const [filteredSidebarItems, setFilteredSidebarItems] = useState(sidebarItems)
+  const [dashboardOpen, setDashboardOpen] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(true)
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState("application")
+
+  const getBaseHref = (href: string) => href.split("?")[0]
+
+  const getHrefParam = (href: string, key: string): string | null => {
+    const q = href.split("?")[1]
+    if (!q) return null
+    const params = new URLSearchParams(q)
+    return params.get(key)
+  }
+
+  const isHrefActive = (href: string) => {
+    const base = getBaseHref(href)
+    const matchesPath = pathname === base || pathname.startsWith(base + "/")
+    if (!matchesPath) return false
+
+    // Special: Settings submenu uses query param to indicate active child
+    if (base === "/portal/settings") {
+      const currentTab = (settingsTab || "application").toLowerCase()
+      const hrefTab = (getHrefParam(href, "tab") || "application").toLowerCase()
+      return currentTab === hrefTab
+    }
+
+    return true
+  }
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const tab = (new URLSearchParams(window.location.search).get("tab") || "application").toLowerCase()
+    setSettingsTab(tab)
+  }, [pathname])
+
+  // Load current role on mount
+  useEffect(() => {
+    const role = getCurrentRole()
+    setCurrentRoleState(role)
+  }, [])
+
+  // Filter sidebar items based on current role
+  useEffect(() => {
+    const allowedPages = getAllowedPagesForRole(currentRole)
+    const filtered = sidebarItems
+      .map((item) => {
+        if (!isGroupItem(item)) return allowedPages.includes(getBaseHref(item.href)) ? item : null
+        const children = item.children.filter((child) => allowedPages.includes(getBaseHref(child.href)))
+        return children.length ? { ...item, children } : null
+      })
+      .filter(Boolean) as SidebarItem[]
+    setFilteredSidebarItems(filtered)
+  }, [currentRole])
+
+  useEffect(() => {
+    const isDashboardActive = pathname === "/portal/status-tracking" ||
+      pathname.startsWith("/portal/status-tracking/") ||
+      pathname === "/portal/mapping" ||
+      pathname.startsWith("/portal/mapping/")
+    const isSettingsActive = pathname === "/portal/settings" || pathname.startsWith("/portal/settings/")
+    if (isDashboardActive) setDashboardOpen(true)
+    if (isSettingsActive) setSettingsOpen(true)
+  }, [pathname])
+
+  const handleRoleChange = (role: UserRole) => {
+    setCurrentRoleState(role)
+    setCurrentRole(role)
+  }
+
+  const handleLogout = () => {
+    setLogoutConfirmOpen(true)
+  }
+
+  const handleConfirmLogout = () => {
+    // Clear user role (set to default "User")
+    setCurrentRole("User")
+    // Navigate to auth page
+    router.push("/auth")
+    setLogoutConfirmOpen(false)
+  }
+
+  const getPageTitle = () => {
+    if (pathname.includes("/sales-order")) return "Sales Order"
+    if (pathname.includes("/ad-hoc")) return "Ad Hoc Order"
+    if (pathname.includes("/scheduling")) return "Scheduling"
+    if (pathname.includes("/packing")) return "Packing"
+    if (pathname.includes("/setting-up")) return "Setting Up"
+    if (pathname.includes("/dismantle")) return "Dismantle"
+    if (pathname.includes("/other-adhoc")) return "Other Adhoc"
+    if (pathname.includes("/completed")) return "Completed"
+    if (pathname.includes("/status-tracking")) return "Status Tracking"
+    if (pathname.includes("/mapping")) return "Mapping"
+    if (pathname.includes("/warnings")) return "Warning & Issues"
+    if (pathname.includes("/inventory")) return "Inventory"
+    if (pathname.includes("/settings")) return "Settings"
+    if (pathname === "/portal") return "Dashboard"
+    return ""
+  }
+
+  return (
+    <div className="flex min-h-screen bg-background">
+      <ConfirmDialog
+        open={logoutConfirmOpen}
+        title="Log out?"
+        description="Are you sure you want to log out?"
+        confirmText="Log out"
+        cancelText="Cancel"
+        onConfirm={handleConfirmLogout}
+        onCancel={() => setLogoutConfirmOpen(false)}
+      />
+      {/* Mobile Menu Overlay */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <aside
+        className={cn(
+          "fixed left-0 top-0 z-50 flex h-full flex-col border-r border-border bg-card transition-all duration-300 lg:relative",
+          sidebarCollapsed ? "w-16" : "w-64",
+          mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        )}
+      >
+        {/* Logo Section */}
+        <div className="flex h-16 items-center justify-between border-b border-border px-4">
+          {!sidebarCollapsed && (
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+                <Sparkles className="h-5 w-5 text-accent-foreground" />
+              </div>
+              <div>
+                <h1 className="text-sm font-bold text-foreground">Être Patisserie</h1>
+                <p className="text-xs text-muted-foreground">Order Management</p>
+              </div>
+            </div>
+          )}
+          {sidebarCollapsed && (
+            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
+              <Sparkles className="h-5 w-5 text-accent-foreground" />
+            </div>
+          )}
+          <button
+            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+            className="hidden rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground lg:block"
+          >
+            <ChevronLeft
+              className={cn(
+                "h-5 w-5 transition-transform",
+                sidebarCollapsed && "rotate-180"
+              )}
+            />
+          </button>
+          <button
+            onClick={() => setMobileMenuOpen(false)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 overflow-y-auto p-3">
+          <div className="space-y-1">
+            {filteredSidebarItems.map((item) => {
+              if (!isGroupItem(item)) {
+                const isActive = isHrefActive(item.href)
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      isActive
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      sidebarCollapsed && "justify-center px-2"
+                    )}
+                    title={sidebarCollapsed ? item.title : undefined}
+                  >
+                    <item.icon className="h-5 w-5 shrink-0" />
+                    {!sidebarCollapsed && <span>{item.title}</span>}
+                  </Link>
+                )
+              }
+
+              const hasActiveChild = item.children.some((child) => isHrefActive(child.href))
+              const isOpen =
+                item.title === "Dashboard"
+                  ? dashboardOpen
+                  : item.title === "Settings"
+                    ? settingsOpen
+                    : hasActiveChild
+
+              return (
+                <div key={item.title} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.title === "Dashboard") setDashboardOpen((v) => !v)
+                      if (item.title === "Settings") setSettingsOpen((v) => !v)
+                    }}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      hasActiveChild
+                        ? "bg-accent text-accent-foreground"
+                        : "text-muted-foreground hover:bg-secondary hover:text-foreground",
+                      sidebarCollapsed && "justify-center px-2"
+                    )}
+                    title={sidebarCollapsed ? item.title : undefined}
+                  >
+                    <item.icon className="h-5 w-5 shrink-0" />
+                    {!sidebarCollapsed && (
+                      <>
+                        <span className="flex-1 text-left">{item.title}</span>
+                        <ChevronDown
+                          className={cn(
+                            "h-4 w-4 transition-transform",
+                            isOpen ? "rotate-180" : "rotate-0"
+                          )}
+                        />
+                      </>
+                    )}
+                  </button>
+
+                  {!sidebarCollapsed && isOpen && (
+                    <div className="pl-6 space-y-1">
+                      {item.children.map((child) => {
+                        const childActive = isHrefActive(child.href)
+                        return (
+                          <Link
+                            key={child.href}
+                            href={child.href}
+                            onClick={() => setMobileMenuOpen(false)}
+                            className={cn(
+                              "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                              childActive
+                                ? "bg-secondary text-foreground"
+                                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            )}
+                          >
+                            <child.icon className="h-4 w-4 shrink-0" />
+                            <span>{child.title}</span>
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </nav>
+
+        {/* Logout Button and Version */}
+        <div className="border-t border-border p-3">
+          <button
+            onClick={handleLogout}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive",
+              sidebarCollapsed && "justify-center px-2"
+            )}
+            title={sidebarCollapsed ? "Log Out" : undefined}
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            {!sidebarCollapsed && <span>Log Out</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="flex flex-1 flex-col">
+        {/* Top Header */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-card px-4 lg:px-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => setMobileMenuOpen(true)}
+              className="rounded-md p-2 text-muted-foreground hover:bg-secondary hover:text-foreground lg:hidden"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <h2 className="text-lg font-semibold text-foreground">
+              {getPageTitle()}
+            </h2>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-muted-foreground sm:block">
+              Être Patisserie | Order Management Portal
+            </span>
+            {mounted ? (
+              <Select value={currentRole} onValueChange={handleRoleChange}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Manager">Manager</SelectItem>
+                  <SelectItem value="Sales">Sales</SelectItem>
+                  <SelectItem value="Warehouse">Warehouse</SelectItem>
+                  <SelectItem value="Traffic">Traffic</SelectItem>
+                  <SelectItem value="Operation">Operation</SelectItem>
+                  <SelectItem value="User">User</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="h-9 w-[140px] rounded-md border border-border bg-muted/40" />
+            )}
+          </div>
+        </header>
+
+        {/* Page Content */}
+        <main className="flex-1 overflow-y-auto p-3 lg:p-4">
+          <SettingsBootstrap />
+          {mounted ? children : null}
+        </main>
+      </div>
+    </div>
+  )
+}
