@@ -13,6 +13,7 @@ import {
   CheckCircle,
   Clock,
   Package,
+  Boxes,
   Wrench,
   Truck,
   Sparkles,
@@ -48,21 +49,24 @@ const getLorryClass = (lorry: string) => {
   return code ? `lorry-${code.toLowerCase()}` : ""
 }
 
-const SALES_ORDER_PHASES = [
-  { key: "scheduling", label: "Scheduling", icon: Clock, href: "/portal/scheduling" },
-  { key: "packing", label: "Packing", icon: Package, href: "/portal/packing" },
-  { key: "setting-up", label: "Setting Up", icon: Wrench, href: "/portal/setting-up" },
-  { key: "dismantle", label: "Dismantle", icon: Truck, href: "/portal/dismantle" },
-  { key: "completed", label: "Completed", icon: CheckCircle, href: "/portal/completed" },
+const SALES_FLOW_PHASES = [
+  { key: "quotation", label: "Quotation", icon: FileText, href: "/portal/sales-order" },
+  { key: "sales-confirmation", label: "Sales Confirmation", icon: Clock, href: "/portal/sales-confirmation" },
+  { key: "planning", label: "Planning", icon: Package, href: "/portal/planning" },
+  { key: "procurement", label: "Procurement", icon: Boxes, href: "/portal/procurement" },
+  { key: "delivery-setup", label: "Delivery (Setup)", icon: Wrench, href: "/portal/setting-up" },
+  { key: "delivery-dismantle", label: "Delivery (Dismantle)", icon: Truck, href: "/portal/dismantle" },
+  { key: "invoice", label: "Invoice", icon: CheckCircle, href: "/portal/invoice" },
 ]
 
-const AD_HOC_ORDER_PHASES = [
-  { key: "scheduling", label: "Scheduling", icon: Clock, href: "/portal/scheduling" },
-  { key: "packing", label: "Packing", icon: Package, href: "/portal/packing" },
-  { key: "setting-up", label: "Setting Up", icon: Wrench, href: "/portal/setting-up" },
-  { key: "dismantle", label: "Dismantle", icon: Truck, href: "/portal/dismantle" },
-  { key: "other-adhoc", label: "Other Adhoc", icon: Sparkles, href: "/portal/other-adhoc" },
-  { key: "completed", label: "Completed", icon: CheckCircle, href: "/portal/completed" },
+const ADHOC_FLOW_PHASES = [
+  { key: "quotation", label: "Quotation", icon: FileText, href: "/portal/ad-hoc" },
+  { key: "sales-confirmation", label: "Sales Confirmation", icon: Clock, href: "/portal/sales-confirmation" },
+  { key: "planning", label: "Planning", icon: Package, href: "/portal/planning" },
+  { key: "procurement", label: "Procurement", icon: Boxes, href: "/portal/procurement" },
+  { key: "delivery-setup", label: "Delivery (Setup)", icon: Wrench, href: "/portal/setting-up" },
+  { key: "delivery-dismantle", label: "Delivery (Dismantle)", icon: Truck, href: "/portal/dismantle" },
+  { key: "invoice", label: "Invoice", icon: CheckCircle, href: "/portal/invoice" },
 ]
 
 export default function StatusTrackingPage() {
@@ -425,36 +429,37 @@ export default function StatusTrackingPage() {
 
   const getPhaseProgress = (status: OrderStatus): number => {
     switch (status) {
-      case "scheduling": return 1
-      case "packing": return 2
-      case "setting-up": return 3
-      case "dismantling": return 4
-      case "other-adhoc": return 5
-      case "completed": return 6
+      case "scheduling": return 2 // Sales Confirmation
+      case "packing": return 3 // Planning
+      case "procurement": return 4
+      case "setting-up": return 5
+      case "dismantling": return 6
+      case "completed": return 7 // Invoice
       default: return 0
     }
   }
 
   const getOrderDetailHref = (order: SalesOrder): string => {
     switch (order.status) {
-      case "scheduling": return `/portal/scheduling/${order.orderNumber}`
+      case "scheduling": return `/portal/sales-confirmation`
       case "packing": return `/portal/packing?order=${order.orderNumber}`
+      case "procurement": return `/portal/procurement`
       case "setting-up": return `/portal/setting-up?order=${order.orderNumber}`
       case "dismantling": return `/portal/dismantle?order=${order.orderNumber}`
       case "other-adhoc": return `/portal/other-adhoc?order=${order.orderNumber}`
       case "completed": return `/portal/completed?order=${order.orderNumber}`
-      default: return `/portal/scheduling/${order.orderNumber}`
+      default: return `/portal/sales-confirmation`
     }
   }
 
   // Summary counts
   const summary = {
-    scheduling: orders.filter(o => o.status === "scheduling").length,
-    packing: orders.filter(o => o.status === "packing").length,
-    settingUp: orders.filter(o => o.status === "setting-up").length,
-    dismantle: orders.filter(o => o.status === "dismantling").length,
-    otherAdhoc: orders.filter(o => o.status === "other-adhoc").length,
-    completed: orders.filter(o => o.status === "completed").length,
+    salesConfirmation: orders.filter(o => o.status === "scheduling").length,
+    planning: orders.filter(o => o.status === "packing").length,
+    procurement: orders.filter(o => o.status === "procurement").length,
+    deliverySetup: orders.filter(o => o.status === "setting-up").length,
+    deliveryDismantle: orders.filter(o => o.status === "dismantling").length,
+    invoice: orders.filter(o => o.status === "completed").length,
     issues: orders.filter(o => o.hasIssue).length,
   }
 
@@ -487,47 +492,47 @@ export default function StatusTrackingPage() {
           <TabsContent value="overview" className="space-y-4">
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
-          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-yellow-400 transition-colors" onClick={() => router.push("/portal/scheduling")}>
+          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-yellow-400 transition-colors" onClick={() => router.push("/portal/sales-confirmation")}>
             <div className="flex items-center gap-1.5 text-yellow-600">
               <Clock className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Scheduling</span>
+              <span className="text-xs font-medium">Sales Conf.</span>
             </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.scheduling}</p>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.salesConfirmation}</p>
           </div>
-          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-blue-400 transition-colors" onClick={() => router.push("/portal/packing")}>
+          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-blue-400 transition-colors" onClick={() => router.push("/portal/planning")}>
             <div className="flex items-center gap-1.5 text-blue-600">
               <Package className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Packing</span>
+              <span className="text-xs font-medium">Planning</span>
             </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.packing}</p>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.planning}</p>
+          </div>
+          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-slate-400 transition-colors" onClick={() => router.push("/portal/procurement")}>
+            <div className="flex items-center gap-1.5 text-slate-600">
+              <Boxes className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Procurement</span>
+            </div>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.procurement}</p>
           </div>
           <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-purple-400 transition-colors" onClick={() => router.push("/portal/setting-up")}>
             <div className="flex items-center gap-1.5 text-purple-600">
               <Wrench className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Setting Up</span>
+              <span className="text-xs font-medium">Delivery (S)</span>
             </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.settingUp}</p>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.deliverySetup}</p>
           </div>
           <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-orange-400 transition-colors" onClick={() => router.push("/portal/dismantle")}>
             <div className="flex items-center gap-1.5 text-orange-600">
               <Truck className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Dismantle</span>
+              <span className="text-xs font-medium">Delivery (D)</span>
             </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.dismantle}</p>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.deliveryDismantle}</p>
           </div>
-          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-pink-400 transition-colors" onClick={() => router.push("/portal/other-adhoc")}>
-            <div className="flex items-center gap-1.5 text-pink-600">
-              <Sparkles className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Other Adhoc</span>
-            </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.otherAdhoc}</p>
-          </div>
-          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-green-400 transition-colors" onClick={() => router.push("/portal/completed")}>
+          <div className="rounded-md border border-border bg-card p-2 cursor-pointer hover:border-green-400 transition-colors" onClick={() => router.push("/portal/invoice")}>
             <div className="flex items-center gap-1.5 text-green-600">
-              <CheckCircle className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Completed</span>
+              <FileText className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Invoice</span>
             </div>
-            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.completed}</p>
+            <p className="text-base font-bold text-foreground mt-1 leading-none">{summary.invoice}</p>
           </div>
           <div className="rounded-md border border-red-300 bg-red-50 p-2">
             <div className="flex items-center gap-1.5 text-red-600">
@@ -541,7 +546,7 @@ export default function StatusTrackingPage() {
         {/* Setup & Dismantle Overview Calendar */}
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Setup & Dismantle Overview</h2>
+            <h2 className="text-lg font-semibold text-foreground">Delivery Overview</h2>
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <Label className="text-xs text-muted-foreground">Date range</Label>
@@ -738,12 +743,12 @@ export default function StatusTrackingPage() {
           </div>
         </div>
 
-        {/* Sales Order Progress Chart */}
+        {/* Sales Progress Chart */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="border-b border-border bg-slate-100 dark:bg-slate-800 p-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <FileText className="h-4 w-4" />
-              Sales Orders
+              Sales
             </h3>
           </div>
           {/* Header Row */}
@@ -760,8 +765,8 @@ export default function StatusTrackingPage() {
                 {sortOrder === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
               </Button>
             </div>
-            <div className="grid grid-cols-5">
-              {SALES_ORDER_PHASES.map((phase) => (
+            <div className="grid grid-cols-7">
+              {SALES_FLOW_PHASES.map((phase) => (
                 <div key={phase.key} className="px-2 py-1.5 text-center text-[10px] font-semibold text-foreground border-l border-border">
                   <phase.icon className="h-3.5 w-3.5 mx-auto mb-0.5" />
                   {phase.label}
@@ -792,9 +797,9 @@ export default function StatusTrackingPage() {
                     <div className="px-2 py-1.5">
                       <div className="flex items-center gap-2">
                         <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-medium text-foreground text-xs">{order.orderNumber}</span>
+                        <span className="font-medium text-foreground text-xs">{order.orderMeta?.salesOrderNumber || order.orderNumber}</span>
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-700">
-                          SO
+                          Sales
                         </span>
                         {hasIssue && <AlertCircle className="h-4 w-4 text-red-500" />}
                         <div className="flex items-center gap-1 ml-auto">
@@ -820,19 +825,37 @@ export default function StatusTrackingPage() {
                     </div>
 
                     {/* Progress Bar Cells */}
-                    <div className="grid grid-cols-5">
-                      {SALES_ORDER_PHASES.map((phase, idx) => {
+                    <div className="grid grid-cols-7">
+                      {SALES_FLOW_PHASES.map((phase, idx) => {
                         const phaseNum = idx + 1
+                        const dismantleRequired = order.eventData?.dismantleRequired ?? true
+                        const isRequired = phase.key === "delivery-dismantle" ? dismantleRequired : true
                         const isPhaseCompleted = progress > phaseNum
                         const isCurrent = progress === phaseNum
                         const issueStage = order.issueData?.flaggedAtStage
-                        const phaseStatus = phase.key === "dismantle" ? "dismantling" : phase.key
+                        const phaseStatus =
+                          phase.key === "sales-confirmation"
+                            ? "scheduling"
+                            : phase.key === "planning"
+                              ? "packing"
+                              : phase.key === "procurement"
+                                ? "procurement"
+                                : phase.key === "delivery-setup"
+                                  ? "setting-up"
+                                  : phase.key === "delivery-dismantle"
+                                    ? "dismantling"
+                                    : phase.key === "invoice"
+                                      ? "completed"
+                                      : "draft"
                         const isIssuePhase = hasIssue && issueStage === phaseStatus
 
                         let barColor = "bg-muted"
                         let bgColor = "bg-transparent"
 
-                        if (isIssuePhase) {
+                        if (!isRequired) {
+                          barColor = "bg-muted"
+                          bgColor = "bg-transparent"
+                        } else if (isIssuePhase) {
                           barColor = "bg-red-500"
                           bgColor = "bg-red-100"
                         } else if (isCompleted) {
@@ -851,7 +874,7 @@ export default function StatusTrackingPage() {
                             key={phase.key}
                             className={`relative flex items-center justify-center border-l border-border ${bgColor}`}
                           >
-                            {isPhaseCompleted || isCurrent ? (
+                            {!isRequired ? null : (isPhaseCompleted || isCurrent) ? (
                               <div
                                 className={`w-full h-2 mx-2 ${barColor} rounded-full ${isCurrent && !hasIssue && !isCompleted ? "animate-pulse" : ""}`}
                               />
@@ -869,12 +892,12 @@ export default function StatusTrackingPage() {
           )}
         </div>
 
-        {/* Ad Hoc Order Progress Chart */}
+        {/* Adhoc Progress Chart */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="border-b border-border bg-amber-100 dark:bg-amber-900 p-3">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
-              Ad Hoc Orders
+              Adhoc
             </h3>
           </div>
           {/* Header Row */}
@@ -891,8 +914,8 @@ export default function StatusTrackingPage() {
                 {sortOrder === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
               </Button>
             </div>
-            <div className="grid grid-cols-6">
-              {AD_HOC_ORDER_PHASES.map((phase) => (
+            <div className="grid grid-cols-7">
+              {ADHOC_FLOW_PHASES.map((phase) => (
                 <div key={phase.key} className="px-2 py-1.5 text-center text-[10px] font-semibold text-foreground border-l border-border">
                   <phase.icon className="h-3.5 w-3.5 mx-auto mb-0.5" />
                   {phase.label}
@@ -923,9 +946,9 @@ export default function StatusTrackingPage() {
                     <div className="px-2 py-1.5">
                       <div className="flex items-center gap-2">
                         <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-medium text-foreground text-xs">{order.orderNumber}</span>
+                        <span className="font-medium text-foreground text-xs">{order.orderMeta?.salesOrderNumber || order.orderNumber}</span>
                         <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold bg-amber-100 text-amber-800">
-                          AH
+                          Adhoc
                         </span>
                         {hasIssue && <AlertCircle className="h-4 w-4 text-red-500" />}
                         <div className="flex items-center gap-1 ml-auto">
@@ -951,24 +974,30 @@ export default function StatusTrackingPage() {
                     </div>
 
                     {/* Progress Bar Cells */}
-                    <div className="grid grid-cols-6">
-                      {AD_HOC_ORDER_PHASES.map((phase, idx) => {
+                    <div className="grid grid-cols-7">
+                      {ADHOC_FLOW_PHASES.map((phase, idx) => {
                         const phaseNum = idx + 1
-                        const isRequired =
-                          phase.key === "scheduling" || phase.key === "completed"
-                            ? true
-                            : phase.key === "packing"
-                              ? (order.adHocOptions?.requiresPacking ?? true)
-                              : phase.key === "setting-up"
-                                ? (order.adHocOptions?.requiresSetup ?? true)
-                                : phase.key === "dismantle"
-                                  ? (order.adHocOptions?.requiresDismantle ?? true)
-                                  : (order.adHocOptions?.requiresOtherAdhoc ?? (order.adHocOptions as any)?.requiresPickup ?? false)
+                        const dismantleRequired =
+                          order.eventData?.dismantleRequired ?? (order.adHocOptions?.requiresDismantle ?? true)
+                        const isRequired = phase.key === "delivery-dismantle" ? dismantleRequired : true
 
                         const isPhaseCompleted = isRequired && progress > phaseNum
                         const isCurrent = isRequired && progress === phaseNum
                         const issueStage = order.issueData?.flaggedAtStage
-                        const phaseStatus = phase.key === "dismantle" ? "dismantling" : phase.key
+                        const phaseStatus =
+                          phase.key === "sales-confirmation"
+                            ? "scheduling"
+                            : phase.key === "planning"
+                              ? "packing"
+                              : phase.key === "procurement"
+                                ? "procurement"
+                                : phase.key === "delivery-setup"
+                                  ? "setting-up"
+                                  : phase.key === "delivery-dismantle"
+                                    ? "dismantling"
+                                    : phase.key === "invoice"
+                                      ? "completed"
+                                      : "draft"
                         const isIssuePhase = hasIssue && issueStage === phaseStatus
 
                         let barColor = "bg-muted"

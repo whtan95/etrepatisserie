@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { SalesOrderPreview } from "@/components/portal/sales-order-preview"
 import { OrderProgress } from "@/components/portal/order-progress"
@@ -56,6 +57,7 @@ import {
   type OrderItem,
   type SalesOrder,
   type OrderMeta,
+  type QuotationOptions,
           PRICES,
           SST_RATE,
   TIME_SLOTS,
@@ -66,6 +68,7 @@ import { deleteOrderByNumber, getAdHocOrders, getSalesOrders } from "@/lib/order
 import { CanopyIcon, RoundTableWithChairsIcon, LongTableIcon, PlasticChairIcon } from "@/components/icons"
 import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage, saveInventoryDbToLocalStorage } from "@/lib/inventory-storage"
 import type { AppSettingsDb } from "@/lib/settings-model"
 import { DEFAULT_APP_SETTINGS_DB } from "@/lib/settings-model"
 import { formatISOToDMY, normalizeDateToISO } from "@/lib/date-dmy"
@@ -73,7 +76,7 @@ import { formatISOToDMY, normalizeDateToISO } from "@/lib/date-dmy"
 const tentColors = ["White", "Red", "Yellow"]
 
 function generateOrderNumber() {
-  const prefix = "SO"
+  const prefix = "Q"
   const date = new Date()
   const year = date.getFullYear().toString().slice(-2)
   const month = (date.getMonth() + 1).toString().padStart(2, "0")
@@ -296,8 +299,12 @@ function SalesOrderContent() {
     customerPreferredDismantleDate: "",
     dismantleDayOfWeek: "",
     estimatedGuests: 0,
-    areaType: "private",
-    areaSelection: "within-ipoh",
+    budgetPerHead: 0,
+    dismantleRequired: false,
+    areaType: "indoor",
+    areaSelection: "",
+    locationAreaType: "etre-cafe",
+    locationAreaOther: "",
     duration: 0,
     desiredSetupTime: "",
     desiredDismantleTime: "",
@@ -324,6 +331,23 @@ function SalesOrderContent() {
   const [newItemQty, setNewItemQty] = useState<number>(1)
   const [newItemPrice, setNewItemPrice] = useState<number>(0)
   const [newItemSst, setNewItemSst] = useState<boolean>(true)
+
+  const [quotationOptions, setQuotationOptions] = useState<QuotationOptions>({
+    brandingRequirement: {
+      type: "none",
+      logoOn: { dessert: false, packaging: false, other: "" },
+      colourOn: { dessert: false, packaging: false, other: "" },
+    },
+    preferredMenuSelection: {
+      step1: "current",
+      notes: "",
+      size: "normal",
+      drinks: { coffee: false, tea: false, fizzy: false, other: "" },
+      packagingBox: "etre-existing",
+      dietaryNeeds: "",
+      servingStyle: { individualDessertBox: false, buffetCateringStyle: false },
+    },
+  })
 
   const [customerData, setCustomerData] = useState<CustomerData>({
     customerName: "",
@@ -505,13 +529,15 @@ function SalesOrderContent() {
   const sundayOTFee = useMemo(() => {
     let fee = 0
     if (isSunday(eventData.customerPreferredSetupDate)) fee += appSettings.sundayOTFee
-    if (isSunday(eventData.customerPreferredDismantleDate)) fee += appSettings.sundayOTFee
+    if (eventData.dismantleRequired && isSunday(eventData.customerPreferredDismantleDate)) fee += appSettings.sundayOTFee
     return fee
-  }, [eventData.customerPreferredSetupDate, eventData.customerPreferredDismantleDate, isSunday, appSettings.sundayOTFee])
+  }, [eventData.customerPreferredSetupDate, eventData.customerPreferredDismantleDate, eventData.dismantleRequired, isSunday, appSettings.sundayOTFee])
 
   const duration = useMemo(() => {
+    if (!eventData.customerPreferredSetupDate) return 0
+    if (!eventData.dismantleRequired) return 1
     return calculateDuration(eventData.customerPreferredSetupDate, eventData.customerPreferredDismantleDate)
-  }, [eventData.customerPreferredSetupDate, eventData.customerPreferredDismantleDate, calculateDuration])
+  }, [eventData.customerPreferredSetupDate, eventData.customerPreferredDismantleDate, eventData.dismantleRequired, calculateDuration])
 
   // Calculate order items and totals
   const { items, subtotal, tax, total, grandTotal, discountAmount } = useMemo(() => {
@@ -688,8 +714,12 @@ function SalesOrderContent() {
         customerPreferredDismantleDate: "",
         dismantleDayOfWeek: "",
         estimatedGuests: 0,
-        areaType: "private",
-        areaSelection: "within-ipoh",
+        budgetPerHead: 0,
+        dismantleRequired: false,
+        areaType: "indoor",
+        areaSelection: "",
+        locationAreaType: "etre-cafe",
+        locationAreaOther: "",
         duration: 0,
         desiredSetupTime: "",
         desiredDismantleTime: "",
@@ -713,7 +743,7 @@ function SalesOrderContent() {
       if (first) {
         setSelectedCatalogItem(first.id)
         setNewItemName(first.name)
-        setNewItemPrice(first.defaultPrice || 0)
+        setNewItemPrice(first.normalSizePrice || 0)
         setNewItemSst(first.defaultSst)
       } else {
         setSelectedCatalogItem("")
@@ -723,6 +753,22 @@ function SalesOrderContent() {
       }
       setNewItemDescription("")
       setNewItemQty(1)
+      setQuotationOptions({
+        brandingRequirement: {
+          type: "none",
+          logoOn: { dessert: false, packaging: false, other: "" },
+          colourOn: { dessert: false, packaging: false, other: "" },
+        },
+        preferredMenuSelection: {
+          step1: "current",
+          notes: "",
+          size: "normal",
+          drinks: { coffee: false, tea: false, fizzy: false, other: "" },
+          packagingBox: "etre-existing",
+          dietaryNeeds: "",
+          servingStyle: { individualDessertBox: false, buffetCateringStyle: false },
+        },
+      })
       setPricingData({
         tent10x10: { quantity: 0, color: "White" },
         tent20x20: { quantity: 0, color: "White" },
@@ -822,7 +868,7 @@ function SalesOrderContent() {
       if (first) {
         setSelectedCatalogItem(first.id)
         setNewItemName(first.name)
-        setNewItemPrice(first.defaultPrice || 0)
+        setNewItemPrice(first.normalSizePrice || 0)
         setNewItemSst(first.defaultSst)
       } else {
         setSelectedCatalogItem("")
@@ -1154,15 +1200,17 @@ function SalesOrderContent() {
       eventData.customerPreferredSetupDate > eventData.eventDate
     ) {
       showAlert(
-        `Preferred setup date (${eventData.customerPreferredSetupDate}) cannot be later than event date (${eventData.eventDate}).`
+        `Preferred delivery date (${eventData.customerPreferredSetupDate}) cannot be later than event date (${eventData.eventDate}).`
       )
       return
     }
 
-    if (
-      eventData.customerPreferredDismantleDate &&
-      eventData.customerPreferredDismantleDate < eventData.eventDate
-    ) {
+    if (eventData.dismantleRequired && !eventData.customerPreferredDismantleDate) {
+      showAlert("Please enter preferred dismantle date")
+      return
+    }
+
+    if (eventData.dismantleRequired && eventData.customerPreferredDismantleDate < eventData.eventDate) {
       showAlert(
         `Preferred dismantle date (${eventData.customerPreferredDismantleDate}) cannot be earlier than event date (${eventData.eventDate}).`
       )
@@ -1174,7 +1222,7 @@ function SalesOrderContent() {
       duration,
       dayOfWeek: getDayOfWeek(prev.eventDate),
       setupDayOfWeek: getDayOfWeek(prev.customerPreferredSetupDate),
-      dismantleDayOfWeek: getDayOfWeek(prev.customerPreferredDismantleDate),
+      dismantleDayOfWeek: prev.dismantleRequired ? getDayOfWeek(prev.customerPreferredDismantleDate) : "",
     }))
     setShowSalesOrder(true)
     setIsFormEditable(false)
@@ -1192,6 +1240,20 @@ function SalesOrderContent() {
   }
 
   useEffect(() => {
+    if (hasInventoryDbInLocalStorage()) {
+      const localDb = getInventoryDbFromLocalStorage()
+      if (Array.isArray(localDb.items) && localDb.items.length) {
+        setCatalog(localDb.items)
+        const first = (localDb.items[0] || DEFAULT_INVENTORY_ITEMS[0]) as InventoryItem | undefined
+        if (!selectedCatalogItem && first) {
+          setSelectedCatalogItem(first.id)
+          setNewItemName(first.name)
+          setNewItemPrice(first.normalSizePrice || 0)
+          setNewItemSst(first.defaultSst)
+        }
+      }
+    }
+
     let canceled = false
     ;(async () => {
       try {
@@ -1199,13 +1261,16 @@ function SalesOrderContent() {
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data?.success) return
         if (!canceled && Array.isArray(data.inventory?.items)) {
-          setCatalog(data.inventory.items)
-          if (!selectedCatalogItem && data.inventory.items.length) {
-            const first = data.inventory.items[0]
-            setSelectedCatalogItem(first.id)
-            setNewItemName(first.name)
-            setNewItemPrice(first.defaultPrice || 0)
-            setNewItemSst(first.defaultSst)
+          if (!hasInventoryDbInLocalStorage()) {
+            const saved = saveInventoryDbToLocalStorage(data.inventory.items)
+            setCatalog(saved.items)
+            if (!selectedCatalogItem && saved.items.length) {
+              const first = saved.items[0]
+              setSelectedCatalogItem(first.id)
+              setNewItemName(first.name)
+              setNewItemPrice(first.normalSizePrice || 0)
+              setNewItemSst(first.defaultSst)
+            }
           }
         }
       } catch {
@@ -1263,7 +1328,7 @@ function SalesOrderContent() {
     const found = catalog.find((i) => i.id === id)
     if (!found) return
     setNewItemName(found.name)
-    setNewItemPrice(found.defaultPrice || 0)
+    setNewItemPrice(found.normalSizePrice || 0)
     setNewItemSst(found.defaultSst)
   }
 
@@ -1399,10 +1464,11 @@ function SalesOrderContent() {
       duration,
       dayOfWeek: getDayOfWeek(eventData.eventDate),
       setupDayOfWeek: getDayOfWeek(eventData.customerPreferredSetupDate),
-      dismantleDayOfWeek: getDayOfWeek(eventData.customerPreferredDismantleDate),
+      dismantleDayOfWeek: eventData.dismantleRequired ? getDayOfWeek(eventData.customerPreferredDismantleDate) : "",
     },
     pricingData: derivedPricingData,
     customerData,
+    quotationOptions,
     items,
     subtotal,
     tax,
@@ -1548,7 +1614,7 @@ function SalesOrderContent() {
         </div>
       )}
       {/* Progress Bar */}
-      <OrderProgress currentPhase={0} />
+      <OrderProgress currentStep="quotation" orderSource="sales" />
 
       {/* Page Title + Mode Switch */}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1795,9 +1861,31 @@ function SalesOrderContent() {
               />
             </div>
 
+            <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
+              <Label htmlFor="budget-per-head" className="text-sm font-medium">
+                Budget / Head (RM)
+              </Label>
+              <Input
+                id="budget-per-head"
+                type="number"
+                min="0"
+                step="0.01"
+                value={typeof eventData.budgetPerHead === "number" ? eventData.budgetPerHead : ""}
+                onChange={(e) =>
+                  setEventData((prev) => ({
+                    ...prev,
+                    budgetPerHead: Math.max(0, parseFloat(e.target.value) || 0),
+                  }))
+                }
+                placeholder="0.00"
+                className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                disabled={!isFormEditable}
+              />
+            </div>
+
             <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-start">
               <Label htmlFor="setup-date" className="text-sm font-medium">
-                Preferred Setup Date <span className="text-destructive">*</span>
+                Preferred Delivery Date <span className="text-destructive">*</span>
               </Label>
               <div className="space-y-1">
                 <Input
@@ -1808,7 +1896,7 @@ function SalesOrderContent() {
                   onChange={(e) => {
                     const next = normalizeDateToISO(e.target.value)
                     if (eventData.eventDate && next && next > eventData.eventDate) {
-                      showAlert("Preferred setup date cannot be later than event date.")
+                      showAlert("Preferred delivery date cannot be later than event date.")
                       return
                     }
                     setEventData((prev) => ({ ...prev, customerPreferredSetupDate: next }))
@@ -1837,14 +1925,14 @@ function SalesOrderContent() {
                   eventData.customerPreferredSetupDate &&
                   eventData.customerPreferredSetupDate > eventData.eventDate && (
                     <p className="text-xs font-medium text-destructive">
-                      Preferred setup date cannot be later than event date.
+                      Preferred delivery date cannot be later than event date.
                     </p>
                   )}
               </div>
             </div>
 
             <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
-              <Label className="text-sm font-medium">Preferred Setup Time</Label>
+              <Label className="text-sm font-medium">Preferred Delivery Time</Label>
               <Select
                 value={customerData.setupTimeSlot}
                 onValueChange={(value) => {
@@ -1867,10 +1955,10 @@ function SalesOrderContent() {
               </Select>
             </div>
 
-            {/* Time Window Mode for Setup - only show if setupTimeSlot is not NONE */}
+            {/* Time Window Mode for Delivery - only show if setupTimeSlot is not NONE */}
             {customerData.setupTimeSlot && customerData.setupTimeSlot !== "NONE" && (
               <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
-                <Label className="text-sm font-medium">Setup Time Mode</Label>
+                <Label className="text-sm font-medium">Delivery Time Mode</Label>
                 <Select
                   value={customerData.setupTimeWindowMode || "flexible"}
                   onValueChange={(value) => {
@@ -1892,6 +1980,38 @@ function SalesOrderContent() {
               </div>
             )}
 
+            <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-start">
+              <Label className="text-sm font-medium">Dismantle Required?</Label>
+              <RadioGroup
+                value={eventData.dismantleRequired ? "yes" : "no"}
+                onValueChange={(v) => {
+                  const required = v === "yes"
+                  setEventData((prev) => ({
+                    ...prev,
+                    dismantleRequired: required,
+                    customerPreferredDismantleDate: required ? prev.customerPreferredDismantleDate : "",
+                    desiredDismantleTime: required ? prev.desiredDismantleTime : "",
+                  }))
+                  if (!required) {
+                    setCustomerData((prev) => ({ ...prev, dismantleTimeSlot: "NONE" }))
+                  }
+                }}
+                className="flex gap-4"
+                disabled={!isFormEditable}
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="no" id="dismantle-no" disabled={!isFormEditable} />
+                  <Label htmlFor="dismantle-no" className="cursor-pointer font-normal">No</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="yes" id="dismantle-yes" disabled={!isFormEditable} />
+                  <Label htmlFor="dismantle-yes" className="cursor-pointer font-normal">Yes</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {eventData.dismantleRequired && (
+              <>
             <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-start">
               <Label htmlFor="dismantle-date" className="text-sm font-medium">
                 Preferred Dismantle Date <span className="text-destructive">*</span>
@@ -1988,6 +2108,8 @@ function SalesOrderContent() {
                 </Select>
               </div>
             )}
+              </>
+            )}
 
             <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
               <Label className="text-sm font-medium">Duration</Label>
@@ -2004,28 +2126,25 @@ function SalesOrderContent() {
               <div className="space-y-1">
                 <RadioGroup
                   value={eventData.areaType}
-                  onValueChange={(value: "private" | "public") =>
+                  onValueChange={(value: "indoor" | "outdoor") =>
                     setEventData((prev) => ({ ...prev, areaType: value }))
                   }
                   className="flex gap-4"
                   disabled={!isFormEditable}
                 >
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="private" id="private" disabled={!isFormEditable} />
-                    <Label htmlFor="private" className="flex cursor-pointer items-center gap-1 font-normal">
-                      <Home className="h-4 w-4" /> Private
+                    <RadioGroupItem value="indoor" id="indoor" disabled={!isFormEditable} />
+                    <Label htmlFor="indoor" className="flex cursor-pointer items-center gap-1 font-normal">
+                      <Home className="h-4 w-4" /> Indoor
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="public" id="public" disabled={!isFormEditable} />
-                    <Label htmlFor="public" className="flex cursor-pointer items-center gap-1 font-normal">
-                      <Building2 className="h-4 w-4" /> Public
+                    <RadioGroupItem value="outdoor" id="outdoor" disabled={!isFormEditable} />
+                    <Label htmlFor="outdoor" className="flex cursor-pointer items-center gap-1 font-normal">
+                      <Building2 className="h-4 w-4" /> Outdoor
                     </Label>
                   </div>
                 </RadioGroup>
-                {eventData.areaType === "public" && (
-                  <p className="text-xs text-muted-foreground">MBI fees will apply</p>
-                )}
               </div>
             </div>
 
@@ -2036,48 +2155,40 @@ function SalesOrderContent() {
               </Label>
               <div className="space-y-1">
                 <RadioGroup
-                  value={eventData.areaSelection}
-                  onValueChange={(value) => setEventData((prev) => ({ ...prev, areaSelection: value }))}
+                  value={eventData.locationAreaType || "etre-cafe"}
+                  onValueChange={(value) =>
+                    setEventData((prev) => ({
+                      ...prev,
+                      locationAreaType: value as any,
+                      locationAreaOther: value === "other" ? prev.locationAreaOther : "",
+                    }))
+                  }
                   className="flex flex-wrap gap-3"
                   disabled={!isFormEditable}
                 >
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="within-ipoh" id="within-ipoh" disabled={!isFormEditable} />
-                    <Label htmlFor="within-ipoh" className="cursor-pointer font-normal">
-                      Within Ipoh
+                    <RadioGroupItem value="etre-cafe" id="etre-cafe" disabled={!isFormEditable} />
+                    <Label htmlFor="etre-cafe" className="cursor-pointer font-normal">
+                      Être Cafe
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="within-perak" id="within-perak" disabled={!isFormEditable} />
-                    <Label htmlFor="within-perak" className="cursor-pointer font-normal">
-                      Within Perak
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="outside-perak" id="outside-perak" disabled={!isFormEditable} />
-                    <Label htmlFor="outside-perak" className="cursor-pointer font-normal">
-                      Outside Perak
+                    <RadioGroupItem value="other" id="location-other" disabled={!isFormEditable} />
+                    <Label htmlFor="location-other" className="cursor-pointer font-normal">
+                      Others
                     </Label>
                   </div>
                 </RadioGroup>
-                {eventData.areaSelection === "outside-perak" && (
-                  <div className="mt-2 space-y-2">
-                    <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
-                      <Label className="text-foreground">Transportation Fee (RM)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={pricingData.transportationFee || ""}
-                        onChange={(e) => setPricingData(prev => ({ ...prev, transportationFee: parseFloat(e.target.value) || 0 }))}
-                        placeholder="0.00"
-                        disabled={!isFormEditable}
-                        className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
-                      />
-                    </div>
-                    <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Truck className="h-3 w-3" /> Enter the transportation fee for delivery outside Perak
-                    </p>
+                {eventData.locationAreaType === "other" && (
+                  <div className="mt-2 grid gap-2 md:grid-cols-[170px_1fr] md:items-center">
+                    <Label className="text-foreground">Please specify</Label>
+                    <Input
+                      value={eventData.locationAreaOther || ""}
+                      onChange={(e) => setEventData((prev) => ({ ...prev, locationAreaOther: e.target.value }))}
+                      placeholder="Enter location / area"
+                      disabled={!isFormEditable}
+                      className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                    />
                   </div>
                 )}
               </div>
@@ -2097,14 +2208,397 @@ function SalesOrderContent() {
               <Eraser className="h-3 w-3" />
               Clear
             </Button>
-          </div>
-          <div className="p-6">
-           <div className="space-y-6">
-             {/* Item entry (Ad Hoc style) */}
-             <div className="space-y-4">
-               <h3 className="font-medium text-foreground">Add Item</h3>
+           </div>
+           <div className="p-6">
+            <div className="space-y-6">
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Branding Requirement (Add brand element)</h3>
 
-              <div className="grid gap-3 sm:grid-cols-3">
+                <RadioGroup
+                  value={quotationOptions.brandingRequirement.type}
+                  onValueChange={(v) =>
+                    setQuotationOptions((prev) => ({
+                      ...prev,
+                      brandingRequirement: {
+                        ...prev.brandingRequirement,
+                        type: v as any,
+                      },
+                    }))
+                  }
+                  className="grid gap-2"
+                  disabled={!isFormEditable}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="none" id="brand-none" disabled={!isFormEditable} />
+                    <Label htmlFor="brand-none" className="cursor-pointer font-normal">A) No requirement</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="logo" id="brand-logo" disabled={!isFormEditable} />
+                    <Label htmlFor="brand-logo" className="cursor-pointer font-normal">B) Brand Logo on</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="colour" id="brand-colour" disabled={!isFormEditable} />
+                    <Label htmlFor="brand-colour" className="cursor-pointer font-normal">C) Brand matching colour on</Label>
+                  </div>
+                </RadioGroup>
+
+                {quotationOptions.brandingRequirement.type === "logo" && (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.brandingRequirement.logoOn.dessert}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              logoOn: { ...prev.brandingRequirement.logoOn, dessert: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Dessert (chocolate disc / paper topper)</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.brandingRequirement.logoOn.packaging}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              logoOn: { ...prev.brandingRequirement.logoOn, packaging: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Packaging (box sleeve / sticker logo)</span>
+                    </div>
+                    <div className="grid gap-2 md:col-span-2 md:grid-cols-[170px_1fr] md:items-center">
+                      <Label className="text-sm font-medium">Others (specify)</Label>
+                      <Input
+                        value={quotationOptions.brandingRequirement.logoOn.other}
+                        onChange={(e) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              logoOn: { ...prev.brandingRequirement.logoOn, other: e.target.value },
+                            },
+                          }))
+                        }
+                        placeholder="Other logo placement"
+                        disabled={!isFormEditable}
+                        className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {quotationOptions.brandingRequirement.type === "colour" && (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.brandingRequirement.colourOn.dessert}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              colourOn: { ...prev.brandingRequirement.colourOn, dessert: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Dessert</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.brandingRequirement.colourOn.packaging}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              colourOn: { ...prev.brandingRequirement.colourOn, packaging: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Customise packaging</span>
+                    </div>
+                    <div className="grid gap-2 md:col-span-2 md:grid-cols-[170px_1fr] md:items-center">
+                      <Label className="text-sm font-medium">Others (specify)</Label>
+                      <Input
+                        value={quotationOptions.brandingRequirement.colourOn.other}
+                        onChange={(e) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            brandingRequirement: {
+                              ...prev.brandingRequirement,
+                              colourOn: { ...prev.brandingRequirement.colourOn, other: e.target.value },
+                            },
+                          }))
+                        }
+                        placeholder="Other colour requirement"
+                        disabled={!isFormEditable}
+                        className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Preferred Menu Selection</h3>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Step 1</Label>
+                  <RadioGroup
+                    value={quotationOptions.preferredMenuSelection.step1}
+                    onValueChange={(v) =>
+                      setQuotationOptions((prev) => ({
+                        ...prev,
+                        preferredMenuSelection: { ...prev.preferredMenuSelection, step1: v as any },
+                      }))
+                    }
+                    className="grid gap-2"
+                    disabled={!isFormEditable}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="current" id="menu-current" disabled={!isFormEditable} />
+                      <Label htmlFor="menu-current" className="cursor-pointer font-normal">A) Current menu (same base, same topper)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="partial" id="menu-partial" disabled={!isFormEditable} />
+                      <Label htmlFor="menu-partial" className="cursor-pointer font-normal">B) Partial customise (same base, customise topper, add branding element)</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="full" id="menu-full" disabled={!isFormEditable} />
+                      <Label htmlFor="menu-full" className="cursor-pointer font-normal">C) Fully customise (none from menu; may incur one-time design & development fees)</Label>
+                    </div>
+                  </RadioGroup>
+                  <p className="text-xs text-muted-foreground">
+                    Photo references can be uploaded in the Special Request & Photos section.
+                  </p>
+                  {(quotationOptions.preferredMenuSelection.step1 === "partial" || quotationOptions.preferredMenuSelection.step1 === "full") && (
+                    <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-start">
+                      <Label className="text-sm font-medium">Requirements / Notes</Label>
+                      <Textarea
+                        value={quotationOptions.preferredMenuSelection.notes}
+                        onChange={(e) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            preferredMenuSelection: { ...prev.preferredMenuSelection, notes: e.target.value },
+                          }))
+                        }
+                        placeholder="List requirements / upload photo reference"
+                        className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                        disabled={!isFormEditable}
+                      />
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Step 2: Size</Label>
+                    <RadioGroup
+                      value={quotationOptions.preferredMenuSelection.size}
+                      onValueChange={(v) =>
+                        setQuotationOptions((prev) => ({
+                          ...prev,
+                          preferredMenuSelection: { ...prev.preferredMenuSelection, size: v as any },
+                        }))
+                      }
+                      className="flex gap-4"
+                      disabled={!isFormEditable}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="normal" id="size-normal" disabled={!isFormEditable} />
+                        <Label htmlFor="size-normal" className="cursor-pointer font-normal">Normal size</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="mini" id="size-mini" disabled={!isFormEditable} />
+                        <Label htmlFor="size-mini" className="cursor-pointer font-normal">Mini bites</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Packaging Box</Label>
+                    <RadioGroup
+                      value={quotationOptions.preferredMenuSelection.packagingBox}
+                      onValueChange={(v) =>
+                        setQuotationOptions((prev) => ({
+                          ...prev,
+                          preferredMenuSelection: { ...prev.preferredMenuSelection, packagingBox: v as any },
+                        }))
+                      }
+                      className="grid gap-2"
+                      disabled={!isFormEditable}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="customer-own" id="box-customer" disabled={!isFormEditable} />
+                        <Label htmlFor="box-customer" className="cursor-pointer font-normal">Use customer own box</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="etre-existing" id="box-etre" disabled={!isFormEditable} />
+                        <Label htmlFor="box-etre" className="cursor-pointer font-normal">Être existing box</Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="premium" id="box-premium" disabled={!isFormEditable} />
+                        <Label htmlFor="box-premium" className="cursor-pointer font-normal">Premium box</Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Step 3: Drinks</Label>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.preferredMenuSelection.drinks.coffee}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            preferredMenuSelection: {
+                              ...prev.preferredMenuSelection,
+                              drinks: { ...prev.preferredMenuSelection.drinks, coffee: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Coffee</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.preferredMenuSelection.drinks.tea}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            preferredMenuSelection: {
+                              ...prev.preferredMenuSelection,
+                              drinks: { ...prev.preferredMenuSelection.drinks, tea: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Tea</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={quotationOptions.preferredMenuSelection.drinks.fizzy}
+                        onCheckedChange={(checked) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            preferredMenuSelection: {
+                              ...prev.preferredMenuSelection,
+                              drinks: { ...prev.preferredMenuSelection.drinks, fizzy: Boolean(checked) },
+                            },
+                          }))
+                        }
+                        disabled={!isFormEditable}
+                      />
+                      <span className="text-sm text-foreground">Fizzy drinks</span>
+                    </div>
+                    <div className="grid gap-2 md:col-span-2 md:grid-cols-[170px_1fr] md:items-center">
+                      <Label className="text-sm font-medium">Others</Label>
+                      <Input
+                        value={quotationOptions.preferredMenuSelection.drinks.other}
+                        onChange={(e) =>
+                          setQuotationOptions((prev) => ({
+                            ...prev,
+                            preferredMenuSelection: {
+                              ...prev.preferredMenuSelection,
+                              drinks: { ...prev.preferredMenuSelection.drinks, other: e.target.value },
+                            },
+                          }))
+                        }
+                        placeholder="Other drinks"
+                        disabled={!isFormEditable}
+                        className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-2 md:grid-cols-[170px_1fr] md:items-start">
+                    <Label className="text-sm font-medium">Dietary needs</Label>
+                    <Textarea
+                      value={quotationOptions.preferredMenuSelection.dietaryNeeds}
+                      onChange={(e) =>
+                        setQuotationOptions((prev) => ({
+                          ...prev,
+                          preferredMenuSelection: { ...prev.preferredMenuSelection, dietaryNeeds: e.target.value },
+                        }))
+                      }
+                      placeholder="Allergies / dietary requirements..."
+                      className={`border-border ${!isFormEditable ? "bg-muted text-muted-foreground" : ""}`}
+                      disabled={!isFormEditable}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Serving style</Label>
+                    <div className="grid gap-3">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={quotationOptions.preferredMenuSelection.servingStyle.individualDessertBox}
+                          onCheckedChange={(checked) =>
+                            setQuotationOptions((prev) => ({
+                              ...prev,
+                              preferredMenuSelection: {
+                                ...prev.preferredMenuSelection,
+                                servingStyle: {
+                                  ...prev.preferredMenuSelection.servingStyle,
+                                  individualDessertBox: Boolean(checked),
+                                },
+                              },
+                            }))
+                          }
+                          disabled={!isFormEditable}
+                        />
+                        <span className="text-sm text-foreground">Individual dessert box</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          checked={quotationOptions.preferredMenuSelection.servingStyle.buffetCateringStyle}
+                          onCheckedChange={(checked) =>
+                            setQuotationOptions((prev) => ({
+                              ...prev,
+                              preferredMenuSelection: {
+                                ...prev.preferredMenuSelection,
+                                servingStyle: {
+                                  ...prev.preferredMenuSelection.servingStyle,
+                                  buffetCateringStyle: Boolean(checked),
+                                },
+                              },
+                            }))
+                          }
+                          disabled={!isFormEditable}
+                        />
+                        <span className="text-sm text-foreground">Buffet catering style</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Tick both if needed.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Item entry (Ad Hoc style) */}
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground">Add Item</h3>
+
+               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium">Category</Label>
                   <Select value={catalogCategory} onValueChange={setCatalogCategory} disabled={!isFormEditable}>

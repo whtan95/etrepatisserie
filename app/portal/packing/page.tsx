@@ -35,11 +35,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { SalesOrder, PackingItem, IssueData } from "@/lib/types"
+import type { SalesOrder, PackingItem, IssueData, MaterialPlanningLine } from "@/lib/types"
 import { getPhaseIndex } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { getNextStatus } from "@/lib/order-flow"
+
+const DEFAULT_MATERIAL_PLANNING_LINES: MaterialPlanningLine[] = [
+  { category: "Kitchen item (raw ingredients)", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Product packaging", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Plating equipments", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Service ware", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Labels & display", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Event day service crew", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+  { category: "Transport lorry", item: "", quantity: "", picName: "", purchasingRequired: false, adequacy: "unknown" },
+]
 
 export default function PackingPage() {
   const router = useRouter()
@@ -55,6 +65,7 @@ export default function PackingPage() {
   const [lorryFilter, setLorryFilter] = useState<"all" | "Team A" | "Team B" | "Team C" | "Team D" | "Team E">("all")
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null)
   const [checkedItems, setCheckedItems] = useState<Record<number, boolean>>({})
+  const [materialLines, setMaterialLines] = useState<MaterialPlanningLine[]>(DEFAULT_MATERIAL_PLANNING_LINES)
   const [packingInfo, setPackingInfo] = useState({
     personnel: "",
     date: new Date().toISOString().split("T")[0],
@@ -214,22 +225,43 @@ export default function PackingPage() {
     } else {
       setIsFormLocked(false)
     }
+
+    if (order.materialPlanning?.lines?.length) {
+      setMaterialLines(order.materialPlanning.lines.map((l) => ({ ...l })))
+    } else {
+      setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
+    }
   }
 
   const handleCheckItem = (idx: number, checked: boolean) => {
     setCheckedItems(prev => ({ ...prev, [idx]: checked }))
   }
 
+  const updateMaterialLine = (idx: number, patch: Partial<MaterialPlanningLine>) => {
+    setMaterialLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)))
+  }
+
+  const addMaterialLine = () => {
+    setMaterialLines((prev) => [
+      ...prev,
+      { category: "Others", item: "", quantity: "", picName: "", purchasingRequired: true, adequacy: "unknown" },
+    ])
+  }
+
+  const removeMaterialLine = (idx: number) => {
+    setMaterialLines((prev) => prev.filter((_, i) => i !== idx))
+  }
+
   const allItemsChecked = selectedOrder?.packingData?.items && 
     selectedOrder.packingData.items.length > 0 &&
     Object.values(checkedItems).filter(Boolean).length === selectedOrder.packingData.items.length
 
-  const handleRejectToScheduling = () => {
+  const handleSendBackToSalesConfirmation = () => {
     if (!selectedOrder) return
     setShowSendBackConfirm(true)
   }
 
-  const confirmRejectToScheduling = () => {
+  const confirmSendBackToSalesConfirmation = () => {
     if (!selectedOrder) return
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
@@ -239,7 +271,8 @@ export default function PackingPage() {
     loadOrders()
     setSelectedOrder(null)
     setCheckedItems({})
-    showAlert("Order sent back to Scheduling!", { title: "Sent Back" })
+    setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
+    showAlert("Order sent back to Sales Confirmation!", { title: "Sent Back" })
     setShowSendBackConfirm(false)
   }
 
@@ -255,6 +288,11 @@ export default function PackingPage() {
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
+      materialPlanning: {
+        lines: materialLines.map((l) => ({ ...l })),
+        updatedAt: new Date().toISOString(),
+        confirmedBy: packingInfo.personnel,
+      },
       packingData: {
         ...order.packingData!,
         packingPersonnel: packingInfo.personnel,
@@ -270,7 +308,7 @@ export default function PackingPage() {
     }))
 
     setIsFormLocked(true)
-    showAlert("Packing information saved!", { title: "Saved" })
+    showAlert("Planning information saved!", { title: "Saved" })
     loadOrders()
   }
 
@@ -278,7 +316,7 @@ export default function PackingPage() {
     setIsFormLocked(false)
   }
 
-  const handleProceedToSetup = () => {
+  const handleProceedToNextStage = () => {
     if (!selectedOrder || !packingInfo.personnel) {
       showAlert("Please enter packing personnel name")
       return
@@ -297,6 +335,11 @@ export default function PackingPage() {
       const base = {
         ...order,
         status: nextStatus,
+        materialPlanning: {
+          lines: materialLines.map((l) => ({ ...l })),
+          updatedAt: new Date().toISOString(),
+          confirmedBy: packingInfo.personnel,
+        },
         packingData: {
           ...order.packingData!,
           packingPersonnel: packingInfo.personnel,
@@ -362,15 +405,22 @@ export default function PackingPage() {
       date: new Date().toISOString().split("T")[0],
       time: new Date().toTimeString().slice(0, 5),
     })
+    setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
 
-    if (nextStatus === "setting-up") {
-      showAlert("Order moved to Setting Up!", { title: "Updated" })
+    if (nextStatus === "procurement") {
+      showAlert("Order moved to Procurement!", { title: "Updated" })
+      router.push("/portal/procurement")
+    } else if (nextStatus === "setting-up") {
+      showAlert("Order moved to Delivery (Setup)!", { title: "Updated" })
+      router.push("/portal/setting-up")
     } else if (nextStatus === "dismantling") {
-      showAlert("Order moved to Dismantle!", { title: "Updated" })
+      showAlert("Order moved to Delivery (Dismantle)!", { title: "Updated" })
+      router.push("/portal/dismantle")
     } else if (nextStatus === "other-adhoc") {
       showAlert("Order moved to Other Adhoc!", { title: "Updated" })
+      router.push("/portal/other-adhoc")
     } else {
-      showAlert("Order completed!", { title: "Completed" })
+      showAlert("Order updated.", { title: "Updated" })
     }
   }
 
@@ -396,8 +446,8 @@ export default function PackingPage() {
     <Suspense fallback={null}>
       <ConfirmDialog
         open={showConfirmPacking}
-        title="Confirm packing?"
-        description="Are you sure you want to confirm and save this packing information? You can still proceed to setup later."
+        title="Confirm planning?"
+        description="Are you sure you want to confirm and save this planning information? You can still proceed later."
         confirmText="Confirm"
         cancelText="Cancel"
         onConfirm={() => {
@@ -409,10 +459,17 @@ export default function PackingPage() {
       <div className="space-y-6">
         {/* Progress Bar */}
         <OrderProgress
-          currentStep="packing"
+          currentStep="planning"
           orderNumber={selectedOrder?.orderNumber}
           hasIssue={selectedOrder?.hasIssue}
           orderSource={selectedOrder?.orderSource}
+          requiresDismantle={
+            selectedOrder
+              ? selectedOrder.orderSource === "ad-hoc"
+                ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+                : selectedOrder.eventData?.dismantleRequired ?? true
+              : undefined
+          }
           adHocOptions={selectedOrder?.adHocOptions}
         />
 
@@ -420,7 +477,7 @@ export default function PackingPage() {
           {/* Orders List */}
           <div className="lg:col-span-1 border border-border rounded-lg bg-card">
             <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground mb-3">Orders to Pack</h2>
+              <h2 className="font-semibold text-foreground mb-3">Orders for Planning</h2>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -625,6 +682,133 @@ export default function PackingPage() {
                   </div>
                 )}
 
+                {/* Material Planning */}
+                <div className="p-4 border-b border-border bg-muted/5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <h3 className="font-semibold text-foreground">Material Planning</h3>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="bg-transparent"
+                      onClick={addMaterialLine}
+                      disabled={isFormLocked}
+                    >
+                      Add Item
+                    </Button>
+                  </div>
+
+                  <div className="overflow-auto rounded-md border border-border bg-card">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40">
+                        <tr className="text-left">
+                          <th className="p-3 w-10">#</th>
+                          <th className="p-3 min-w-[220px]">Category</th>
+                          <th className="p-3 min-w-[220px]">Item</th>
+                          <th className="p-3 w-28">Qty</th>
+                          <th className="p-3 w-40">PIC Name</th>
+                          <th className="p-3 w-44">Purchasing Required</th>
+                          <th className="p-3 w-36">Enough / Inadequate</th>
+                          <th className="p-3 w-16"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {materialLines.map((line, idx) => (
+                          <tr key={idx} className="border-t border-border">
+                            <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                            <td className="p-3">
+                              <Input
+                                value={line.category}
+                                onChange={(e) => updateMaterialLine(idx, { category: e.target.value })}
+                                placeholder="Category"
+                                disabled={isFormLocked}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                value={line.item}
+                                onChange={(e) => updateMaterialLine(idx, { item: e.target.value })}
+                                placeholder="Can add item"
+                                disabled={isFormLocked}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                value={line.quantity}
+                                onChange={(e) => updateMaterialLine(idx, { quantity: e.target.value })}
+                                placeholder="Qty"
+                                disabled={isFormLocked}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                value={line.picName}
+                                onChange={(e) => updateMaterialLine(idx, { picName: e.target.value })}
+                                placeholder="PIC"
+                                disabled={isFormLocked}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Select
+                                value={line.purchasingRequired ? "yes" : "no"}
+                                onValueChange={(v) => updateMaterialLine(idx, { purchasingRequired: v === "yes" })}
+                                disabled={isFormLocked}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="yes">Yes</SelectItem>
+                                  <SelectItem value="no">No</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-3">
+                              <Select
+                                value={line.adequacy}
+                                onValueChange={(v) => updateMaterialLine(idx, { adequacy: v as any })}
+                                disabled={isFormLocked}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="Select" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="unknown">-</SelectItem>
+                                  <SelectItem value="enough">Enough</SelectItem>
+                                  <SelectItem value="inadequate">Inadequate</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </td>
+                            <td className="p-3">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeMaterialLine(idx)}
+                                disabled={isFormLocked}
+                                className="text-muted-foreground hover:text-destructive"
+                                title="Remove"
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                        {materialLines.length === 0 && (
+                          <tr>
+                            <td className="p-6 text-center text-muted-foreground" colSpan={8}>
+                              No material planning lines.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Mark any line as Inadequate to appear in Procurement.
+                  </p>
+                </div>
+
                 {/* Items to Pack Checklist */}
                 <div className="p-4">
                   <h3 className="font-semibold text-foreground mb-4">Items to Pack</h3>
@@ -670,12 +854,12 @@ export default function PackingPage() {
 
                 {/* Packing Personnel Info */}
                 <div className="p-4 border-t border-border bg-muted/30">
-                  <h3 className="font-semibold text-foreground mb-4">Packing Information</h3>
+                  <h3 className="font-semibold text-foreground mb-4">Planning Information</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <Label htmlFor="packing-personnel" className="text-foreground">
                         <User className="h-4 w-4 inline mr-1" />
-                        Packing Personnel *
+                        Planning PIC *
                       </Label>
                       <Input
                         id="packing-personnel"
@@ -738,12 +922,12 @@ export default function PackingPage() {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={handleRejectToScheduling}
+                      onClick={handleSendBackToSalesConfirmation}
                       className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
                       disabled={isFormLocked}
                     >
                       <Undo2 className="h-4 w-4" />
-                      Send Back to Scheduling
+                      Send Back to Sales Confirmation
                     </Button>
                     <Button
                       variant="outline"
@@ -766,12 +950,12 @@ export default function PackingPage() {
                             <Save className="h-4 w-4" />
                             Edit Information
                           </Button>
-                          <Button
-                            onClick={handleProceedToSetup}
+                           <Button
+                            onClick={handleProceedToNextStage}
                             className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                           >
                             <CheckCircle className="h-4 w-4" />
-                            Proceed to Setup
+                            Proceed to Procurement
                           </Button>
                         </>
                       ) : (
@@ -792,7 +976,7 @@ export default function PackingPage() {
                 <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <h3 className="text-lg font-medium text-foreground mb-2">Select an Order</h3>
                 <p className="text-muted-foreground">
-                  Choose an order from the list to start packing
+                  Choose an order from the list to start planning
                 </p>
               </div>
             )}
@@ -882,12 +1066,12 @@ export default function PackingPage() {
       actionText={alertState.actionText}
       onClose={closeAlert}
     />
-    <ConfirmDialog
+      <ConfirmDialog
       open={showSendBackConfirm}
-      title="Send Back to Scheduling"
-      description="Are you sure you want to send this order back to Scheduling?"
+      title="Send Back to Sales Confirmation"
+      description="Are you sure you want to send this order back to Sales Confirmation?"
       confirmText="Yes, send back"
-      onConfirm={confirmRejectToScheduling}
+      onConfirm={confirmSendBackToSalesConfirmation}
       onCancel={() => setShowSendBackConfirm(false)}
     />
     </>

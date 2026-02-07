@@ -38,7 +38,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react"
-import type { SalesOrder, IssueData, SetupPhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
+import type { SalesOrder, IssueData, SetupData, SetupPhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
@@ -232,12 +232,35 @@ export default function SettingUpPage() {
     setAppliedDateTo("")
   }
 
+  const ensureSetupData = (order: SalesOrder) => {
+    if (order.setupData) return order
+
+    const setupData: SetupData = {
+      setupPersonnel: "",
+      setupDate: "",
+      setupStartTime: "",
+      setupCompletionTime: "",
+      photos: [],
+      status: "pending",
+      phase: "pending",
+    }
+
+    updateOrderByNumber(order.orderNumber, (current) => ({
+      ...current,
+      setupData,
+      updatedAt: new Date().toISOString(),
+    }))
+
+    return { ...order, setupData }
+  }
+
   const handleSelectOrder = (order: SalesOrder) => {
-    setSelectedOrder(order)
+    const normalized = ensureSetupData(order)
+    setSelectedOrder(normalized)
     // Determine phase from order data
-    const phase = order.setupData?.phase || "pending"
+    const phase = normalized.setupData?.phase || "pending"
     setSetupPhase(phase)
-    setPhotos(order.setupData?.photos || [])
+    setPhotos(normalized.setupData?.photos || [])
   }
 
   // Start Journey
@@ -445,7 +468,7 @@ export default function SettingUpPage() {
     setShowSendBackModal(true)
   }
 
-  const sendBackTo = (target: "packing" | "scheduling") => {
+  const sendBackTo = (target: "packing" | "procurement" | "scheduling") => {
     if (!selectedOrder) return
 
     // Ensure timers stop before we clear data / navigate.
@@ -458,7 +481,7 @@ export default function SettingUpPage() {
         updatedAt: new Date().toISOString(),
       }
 
-      if (target === "packing") {
+      if (target === "packing" || target === "procurement") {
         return {
           ...base,
           setupData: undefined,
@@ -481,7 +504,14 @@ export default function SettingUpPage() {
     setSetupPhase("pending")
     setPhotos([])
     setShowSendBackModal(false)
-    showAlert(target === "packing" ? "Order sent back to Packing!" : "Order sent back to Scheduling!", { title: "Sent Back" })
+    showAlert(
+      target === "packing"
+        ? "Order sent back to Planning!"
+        : target === "procurement"
+          ? "Order sent back to Procurement!"
+          : "Order sent back to Sales Confirmation!",
+      { title: "Sent Back" }
+    )
   }
 
   // Complete setup
@@ -534,7 +564,7 @@ export default function SettingUpPage() {
     } else if (nextStatus === "other-adhoc") {
       showAlert("Setup completed! Order moved to Other Adhoc.", { title: "Updated" })
     } else {
-      showAlert("Setup completed! Order marked as Completed.", { title: "Completed" })
+      showAlert("Setup completed! Order moved to Invoice.", { title: "Invoice" })
     }
   }
 
@@ -849,7 +879,11 @@ export default function SettingUpPage() {
             <div className="p-4 border-t border-border">
               <Button onClick={handleSetupDone} className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
                 <CheckCircle className="h-4 w-4" />
-                Setup Done - Proceed to Dismantle
+                {((selectedOrder?.orderSource === "ad-hoc"
+                  ? selectedOrder?.adHocOptions?.requiresDismantle
+                  : selectedOrder?.eventData?.dismantleRequired) ?? true)
+                  ? "Setup Done - Proceed to Delivery (Dismantle)"
+                  : "Setup Done - Proceed to Invoice"}
               </Button>
             </div>
           </div>
@@ -865,10 +899,17 @@ export default function SettingUpPage() {
       <Suspense fallback={null}>
         <div className="space-y-6">
           <OrderProgress
-            currentStep="setting-up"
+            currentStep="delivery-setup"
             orderNumber={selectedOrder?.orderNumber}
             hasIssue={selectedOrder?.hasIssue}
             orderSource={selectedOrder?.orderSource}
+            requiresDismantle={
+              selectedOrder
+                ? selectedOrder.orderSource === "ad-hoc"
+                  ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+                  : selectedOrder.eventData?.dismantleRequired ?? true
+                : undefined
+            }
             adHocOptions={selectedOrder?.adHocOptions}
           />
 
@@ -876,7 +917,7 @@ export default function SettingUpPage() {
             {/* Orders List */}
             <div className="lg:col-span-1 border border-border rounded-lg bg-card">
               <div className="p-4 border-b border-border">
-                <h2 className="font-semibold text-foreground mb-3">Pending Setup</h2>
+                <h2 className="font-semibold text-foreground mb-3">Pending Delivery (Setup)</h2>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
@@ -1408,7 +1449,7 @@ export default function SettingUpPage() {
 
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">Choose where to send this order back to:</p>
-              <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2 sm:grid-cols-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -1417,11 +1458,15 @@ export default function SettingUpPage() {
                   disabled={selectedOrder?.orderSource === "ad-hoc" && selectedOrder?.adHocOptions?.requiresPacking === false}
                 >
                   <Undo2 className="h-4 w-4" />
-                  Back to Packing
+                  Back to Planning
+                </Button>
+                <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("procurement")}>
+                  <Undo2 className="h-4 w-4" />
+                  Back to Procurement
                 </Button>
                 <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("scheduling")}>
                   <Undo2 className="h-4 w-4" />
-                  Back to Scheduling
+                  Back to Sales Confirmation
                 </Button>
               </div>
               <div className="pt-2">

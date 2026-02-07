@@ -23,7 +23,7 @@ import {
   ChevronUp,
   Trash2,
 } from "lucide-react"
-import type { SalesOrder, IssueData } from "@/lib/types"
+import type { SalesOrder, IssueData, SetupData, DismantleData } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import { useSearchParams } from "next/navigation"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
@@ -63,6 +63,7 @@ export default function CompletedPage() {
   const filteredOrders = orders.filter(order => {
     const matchesSearch =
       order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (order.orderMeta?.salesOrderNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customerData.customerName.toLowerCase().includes(searchTerm.toLowerCase())
 
     let matchesDate = true
@@ -77,12 +78,80 @@ export default function CompletedPage() {
     return matchesSearch && matchesDate
   })
 
-  const handleSendBackTo = (orderNumber: string, targetStatus: string) => {
-    updateOrderByNumber(orderNumber, (order) => ({
-      ...order,
-      status: targetStatus as SalesOrder["status"],
-      updatedAt: new Date().toISOString(),
-    }))
+  const handleSendBackTo = (orderNumber: string, targetStatus: SalesOrder["status"]) => {
+    updateOrderByNumber(orderNumber, (order) => {
+      const base = {
+        ...order,
+        status: targetStatus,
+        updatedAt: new Date().toISOString(),
+      }
+
+      if (targetStatus === "dismantling") {
+        const dismantleData: DismantleData = order.dismantleData ?? {
+          dismantlePersonnel: "",
+          dismantleDate: "",
+          dismantleStartTime: "",
+          dismantleCompletionTime: "",
+          photos: [],
+          status: "pending",
+          phase: "pending",
+        }
+        return {
+          ...base,
+          dismantleData,
+          otherAdhocData: undefined,
+        }
+      }
+
+      if (targetStatus === "setting-up") {
+        const setupData: SetupData = order.setupData ?? {
+          setupPersonnel: "",
+          setupDate: "",
+          setupStartTime: "",
+          setupCompletionTime: "",
+          photos: [],
+          status: "pending",
+          phase: "pending",
+        }
+        return {
+          ...base,
+          setupData,
+          dismantleData: undefined,
+          otherAdhocData: undefined,
+        }
+      }
+
+      if (targetStatus === "procurement") {
+        return {
+          ...base,
+          setupData: undefined,
+          dismantleData: undefined,
+          otherAdhocData: undefined,
+        }
+      }
+
+      if (targetStatus === "packing") {
+        return {
+          ...base,
+          setupData: undefined,
+          dismantleData: undefined,
+          otherAdhocData: undefined,
+        }
+      }
+
+      if (targetStatus === "scheduling") {
+        return {
+          ...base,
+          packingData: undefined,
+          materialPlanning: undefined,
+          setupData: undefined,
+          dismantleData: undefined,
+          otherAdhocData: undefined,
+        }
+      }
+
+      return base
+    })
     loadOrders()
     setSelectedOrder(null)
   }
@@ -159,12 +228,12 @@ export default function CompletedPage() {
   return (
     <Suspense fallback={null}>
       <div className="space-y-6">
-        <OrderProgress currentStep="completed" />
+        <OrderProgress currentStep="invoice" />
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Completed Orders</h1>
-            <p className="text-sm text-muted-foreground">{filteredOrders.length} orders completed</p>
+            <h1 className="text-2xl font-bold text-foreground">Invoice</h1>
+            <p className="text-sm text-muted-foreground">{filteredOrders.length} invoiceable orders</p>
           </div>
         </div>
 
@@ -173,7 +242,7 @@ export default function CompletedPage() {
           <div className="relative md:col-span-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by order number or customer..."
+              placeholder="Search by order / sales no or customer..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value)
@@ -196,9 +265,9 @@ export default function CompletedPage() {
         {paginatedOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card py-16">
             <CheckCircle className="mb-4 h-12 w-12 text-muted-foreground" />
-            <h3 className="mb-2 text-lg font-semibold text-foreground">No Completed Orders</h3>
+            <h3 className="mb-2 text-lg font-semibold text-foreground">No Invoiceable Orders</h3>
             <p className="text-sm text-muted-foreground">
-              Orders will appear here once they are fully completed
+              Orders will appear here once delivery is completed
             </p>
           </div>
         ) : (
@@ -208,9 +277,7 @@ export default function CompletedPage() {
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-foreground">
-                        Order No.
-                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-foreground">Order / Sales No.</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-foreground">
                         Customer
                       </th>
@@ -220,9 +287,7 @@ export default function CompletedPage() {
                       <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-foreground">
                         Total
                       </th>
-                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-foreground">
-                        Completed
-                      </th>
+                      <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-foreground">Invoice</th>
                       <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-foreground">
                         Actions
                       </th>
@@ -234,7 +299,7 @@ export default function CompletedPage() {
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium text-foreground">{order.orderNumber}</span>
+                            <span className="font-medium text-foreground">{order.orderMeta?.salesOrderNumber || order.orderNumber}</span>
                           </div>
                         </td>
                         <td className="px-4 py-4">
@@ -254,7 +319,7 @@ export default function CompletedPage() {
                         </td>
                         <td className="px-4 py-4 text-center">
                           <span className="inline-block rounded-full px-3 py-1 text-xs font-medium bg-green-100 text-green-700">
-                            Completed
+                            Invoiceable
                           </span>
                         </td>
                         <td className="px-4 py-4">
@@ -380,7 +445,8 @@ export default function CompletedPage() {
               <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Scheduling</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Sales Confirmation</h3>
+                    <p className="text-sm text-muted-foreground">Sales Order No: {selectedOrder.orderMeta?.salesOrderNumber || "-"}</p>
                     <p className="text-sm text-muted-foreground">Personnel: {selectedOrder.additionalInfo?.schedulingPersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.additionalInfo?.schedulingDate || "-"}</p>
                     <p className="text-sm text-muted-foreground">Time: {selectedOrder.additionalInfo?.schedulingTime || "-"}</p>
@@ -398,7 +464,7 @@ export default function CompletedPage() {
 
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Packing</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Planning</h3>
                     <p className="text-sm text-muted-foreground">By: {selectedOrder.packingData?.packingPersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.packingData?.packingDate || "-"}</p>
                     <p className="text-sm text-muted-foreground">Time: {selectedOrder.packingData?.packingTime || "-"}</p>
@@ -446,6 +512,14 @@ export default function CompletedPage() {
                 variant="outline"
                 onClick={() => handleSendBackTo(selectedOrder.orderNumber, "dismantling")}
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
+                style={{
+                  display:
+                    ((selectedOrder.orderSource === "ad-hoc"
+                      ? selectedOrder.adHocOptions?.requiresDismantle
+                      : selectedOrder.eventData?.dismantleRequired) ?? true)
+                      ? "inline-flex"
+                      : "none",
+                }}
               >
                 <Undo2 className="h-4 w-4" />
                 Send Back to Dismantle
@@ -456,7 +530,15 @@ export default function CompletedPage() {
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Setting Up
+                Send Back to Delivery (Setup)
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => handleSendBackTo(selectedOrder.orderNumber, "procurement")}
+                className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
+              >
+                <Undo2 className="h-4 w-4" />
+                Send Back to Procurement
               </Button>
               <Button
                 variant="outline"
@@ -464,7 +546,7 @@ export default function CompletedPage() {
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Packing
+                Send Back to Planning
               </Button>
               <Button
                 variant="outline"
@@ -472,7 +554,7 @@ export default function CompletedPage() {
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Scheduling
+                Send Back to Sales Confirmation
               </Button>
               <Button
                 variant="outline"

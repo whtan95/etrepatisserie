@@ -445,6 +445,7 @@ export default function SchedulingDetailPage({
     dismantleTeam: "",
   })
   const [aiDistanceKm, setAIDistanceKm] = useState<number>(15) // Default 15km
+  const aiTimeWindowMode = "flexible" as const
   const [aiDistanceLoading, setAIDistanceLoading] = useState(false)
   const [aiDistanceMapUrl, setAIDistanceMapUrl] = useState<string>("")
   const [aiDistanceAutoCalculated, setAIDistanceAutoCalculated] = useState(false)
@@ -3973,7 +3974,7 @@ export default function SchedulingDetailPage({
                       try {
                         const { optimizeDailyRoute } = await import("@/lib/daily-route-optimizer")
                         const result = await optimizeDailyRoute(
-                          routeOptimizerTeam,
+                          routeOptimizerTeam as any,
                           routeOptimizerDate,
                           routeOptimizerStartingPoint,
                           routeOptimizerStartingPoint === "other" ? routeOptimizerCustomAddress : undefined

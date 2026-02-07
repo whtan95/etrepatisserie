@@ -339,7 +339,7 @@ export async function applyOptimizedRoute(optimization: DailyRouteOptimization):
     }
 
     // Save the updated order
-    updateOrderByNumber(order.orderMeta.orderNumber, order)
+    updateOrderByNumber(order.orderNumber, () => ({ ...order }))
   }
 }
 

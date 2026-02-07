@@ -18,6 +18,7 @@ import type { AppSettingsDb, AISettingsDb } from "@/lib/settings-model"
 import { DEFAULT_APP_SETTINGS_DB, DEFAULT_AI_SETTINGS_DB } from "@/lib/settings-model"
 import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage, saveInventoryDbToLocalStorage } from "@/lib/inventory-storage"
 
 // UI defaults (sourced from Settings DB defaults)
 const DEFAULT_SST_RATE = DEFAULT_APP_SETTINGS_DB.sstRate
@@ -43,14 +44,15 @@ type AISettings = AISettingsDb
 const ALL_PAGES = [
   { path: "/portal/status-tracking", label: "Status Tracking" },
   { path: "/portal/mapping", label: "Mapping" },
-  { path: "/portal/sales-order", label: "Sales Order" },
-  { path: "/portal/ad-hoc", label: "Ad Hoc Order" },
-  { path: "/portal/scheduling", label: "Scheduling" },
-  { path: "/portal/packing", label: "Packing" },
-  { path: "/portal/setting-up", label: "Setting Up" },
-  { path: "/portal/dismantle", label: "Dismantle" },
-  { path: "/portal/other-adhoc", label: "Other Adhoc" },
-  { path: "/portal/completed", label: "Completed" },
+  { path: "/portal/sales-order", label: "Sales Quotation" },
+  { path: "/portal/ad-hoc", label: "Adhoc Quotation" },
+  { path: "/portal/sales-confirmation", label: "Sales Confirmation" },
+  { path: "/portal/planning", label: "Planning" },
+  { path: "/portal/procurement", label: "Procurement" },
+  { path: "/portal/setting-up", label: "Delivery (Setup)" },
+  { path: "/portal/dismantle", label: "Delivery (Dismantle)" },
+  { path: "/portal/invoice", label: "Invoice" },
+  { path: "/portal/inventory", label: "Inventory" },
   { path: "/portal/warnings", label: "Warning & Issues" },
   { path: "/portal/settings", label: "Settings" },
 ]
@@ -129,6 +131,13 @@ export default function SettingsPage() {
 
   // Load inventory items (for setup/dismantle time configuration)
   useEffect(() => {
+    if (hasInventoryDbInLocalStorage()) {
+      const localDb = getInventoryDbFromLocalStorage()
+      if (Array.isArray(localDb.items) && localDb.items.length) {
+        setInventoryItems(localDb.items)
+      }
+    }
+
     let canceled = false
     ;(async () => {
       try {
@@ -136,7 +145,10 @@ export default function SettingsPage() {
         const data = await res.json().catch(() => ({}))
         if (!res.ok || !data?.success) return
         if (!canceled && Array.isArray(data.inventory?.items)) {
-          setInventoryItems(data.inventory.items)
+          if (!hasInventoryDbInLocalStorage()) {
+            const saved = saveInventoryDbToLocalStorage(data.inventory.items)
+            setInventoryItems(saved.items)
+          }
         }
       } catch {
         // ignore and keep defaults

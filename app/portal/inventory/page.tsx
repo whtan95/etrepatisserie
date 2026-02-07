@@ -11,21 +11,35 @@ import { AlertDialog } from "@/components/ui/alert-dialog"
 import { Plus, Save, Trash2 } from "lucide-react"
 import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage, saveInventoryDbToLocalStorage } from "@/lib/inventory-storage"
 
-const CATEGORIES = ["Tents", "Tables & Chairs", "Equipment", "Others"] as const
+const CATEGORIES = ["Viennoiserie", "Bread", "Savoury", "Petit Gateaux", "Tart", "Cheesecake", "Seasonal", "Others"] as const
+const UNIT_TYPES = ["piece", "loaf", "set", "box", "tray", "others"] as const
+const STATUSES = ["Active", "Inactive", "Active (Seasonal)"] as const
 
 function asNumber(value: string): number {
   const n = Number(value)
   return Number.isFinite(n) ? n : 0
 }
 
+type InventoryRow = InventoryItem & { rowId: string }
+
 export default function InventoryPage() {
   const { alertState, showAlert, closeAlert } = useAppAlert()
-  const [items, setItems] = useState<InventoryItem[]>(DEFAULT_INVENTORY_ITEMS)
+  const [items, setItems] = useState<InventoryRow[]>(
+    DEFAULT_INVENTORY_ITEMS.map((it) => ({ ...it, rowId: crypto.randomUUID() }))
+  )
   const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState("")
 
   useEffect(() => {
+    if (hasInventoryDbInLocalStorage()) {
+      const localDb = getInventoryDbFromLocalStorage()
+      if (Array.isArray(localDb.items) && localDb.items.length) {
+        setItems(localDb.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
+      }
+    }
+
     let canceled = false
     ;(async () => {
       try {
@@ -33,7 +47,12 @@ export default function InventoryPage() {
         const data = await res.json()
         if (!res.ok || !data?.success) return
         if (!canceled && Array.isArray(data.inventory?.items)) {
-          setItems(data.inventory.items)
+          // If localStorage already has data, prefer it. Otherwise hydrate from API and mirror to localStorage.
+          const hasLocal = hasInventoryDbInLocalStorage()
+          if (!hasLocal) {
+            const saved = saveInventoryDbToLocalStorage(data.inventory.items)
+            setItems(saved.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
+          }
         }
       } catch {
         // ignore and use defaults
@@ -47,52 +66,106 @@ export default function InventoryPage() {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
     if (!term) return items
-    return items.filter((it) => it.name.toLowerCase().includes(term) || it.category.toLowerCase().includes(term))
+    return items.filter((it) => {
+      const haystack = [
+        it.sku,
+        it.id,
+        it.category,
+        it.name,
+        it.unitType,
+        it.status,
+        it.notes,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+      return haystack.includes(term)
+    })
   }, [items, search])
 
   const addItem = () => {
-    const id = crypto.randomUUID()
     setItems((prev) => [
       ...prev,
-      { id, category: "Others", name: "", defaultPrice: 0, defaultSst: true },
+      {
+        rowId: crypto.randomUUID(),
+        id: "",
+        sku: "",
+        category: "Others",
+        name: "",
+        normalSizePrice: 0,
+        petitSizePrice: 0,
+        unitType: "piece",
+        defaultMoq: 0,
+        status: "Active",
+        seasonal: false,
+        notes: "",
+        defaultSst: false,
+      },
     ])
   }
 
-  const removeItem = (id: string) => {
-    setItems((prev) => prev.filter((it) => it.id !== id))
+  const removeItem = (rowId: string) => {
+    setItems((prev) => prev.filter((it) => it.rowId !== rowId))
   }
 
-  const updateItem = (id: string, patch: Partial<InventoryItem>) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)))
+  const updateItem = (rowId: string, patch: Partial<InventoryRow>) => {
+    setItems((prev) => prev.map((it) => (it.rowId === rowId ? { ...it, ...patch } : it)))
   }
 
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      const cleaned = items
-        .map((it) => ({
-          ...it,
+      const cleaned = items.map((it) => {
+        const sku = (it.sku || it.id || "").trim().toUpperCase()
+        return {
+          id: sku,
+          sku,
           name: it.name.trim(),
           category: it.category.trim() || "Others",
-          defaultPrice: Number.isFinite(it.defaultPrice) ? it.defaultPrice : 0,
+          normalSizePrice: Number.isFinite(it.normalSizePrice) ? it.normalSizePrice : 0,
+          petitSizePrice: Number.isFinite(it.petitSizePrice) ? it.petitSizePrice : 0,
+          unitType: (it.unitType || "").trim() || "piece",
+          defaultMoq: Number.isFinite(it.defaultMoq) ? Math.max(0, it.defaultMoq) : 0,
+          status: (it.status || "").trim() || "Active",
+          seasonal: !!it.seasonal,
+          notes: (it.notes || "").trim(),
           defaultSst: !!it.defaultSst,
-        }))
-        .filter((it) => it.name)
-
-      const res = await fetch("/api/inventory", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: cleaned }),
+        } satisfies InventoryItem
       })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok || !data?.success) {
-        showAlert(data?.error || "Failed to save inventory", { title: "Save Failed", actionText: "OK" })
+
+      const withoutEmpty = cleaned.filter((it) => it.sku && it.name)
+      const skuCounts = new Map<string, number>()
+      for (const it of withoutEmpty) {
+        skuCounts.set(it.sku, (skuCounts.get(it.sku) || 0) + 1)
+      }
+      const dup = Array.from(skuCounts.entries()).find(([, n]) => n > 1)?.[0]
+      if (dup) {
+        showAlert(`Duplicate SKU found: ${dup}`, { title: "Save Failed", actionText: "OK" })
         return
       }
-      if (Array.isArray(data.inventory?.items)) {
-        setItems(data.inventory.items)
+
+      // Always save to localStorage (primary, per-client).
+      const savedLocal = saveInventoryDbToLocalStorage(withoutEmpty)
+      setItems(savedLocal.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
+
+      // Best-effort: also persist to server DB so other browsers/devices can hydrate.
+      try {
+        const res = await fetch("/api/inventory", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: withoutEmpty, version: 3 }),
+        })
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data?.success && Array.isArray(data.inventory?.items)) {
+          // Mirror normalized server response back into localStorage too.
+          const synced = saveInventoryDbToLocalStorage(data.inventory.items)
+          setItems(synced.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
+        }
+      } catch {
+        // ignore; localStorage already saved
       }
-      showAlert("Inventory saved", { title: "Saved", actionText: "OK" })
+
+      showAlert("Inventory saved (local)", { title: "Saved", actionText: "OK" })
     } catch {
       showAlert("Failed to save inventory", { title: "Save Failed", actionText: "OK" })
     } finally {
@@ -128,7 +201,7 @@ export default function InventoryPage() {
         <div className="grid gap-3 md:grid-cols-[1fr_220px]">
           <div className="space-y-2">
             <Label>Search</Label>
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name or category..." />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU, name, category..." />
           </div>
         </div>
 
@@ -136,25 +209,32 @@ export default function InventoryPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <th className="p-3">Name</th>
+                <th className="p-3 w-44">SKU</th>
                 <th className="p-3 w-52">Category</th>
-                <th className="p-3 w-36">Price (RM)</th>
-                <th className="p-3 w-28">SST</th>
+                <th className="p-3 min-w-[260px]">Product Name</th>
+                <th className="p-3 w-36">Normal Size Price (RM)</th>
+                <th className="p-3 w-36">Petit Size Price (RM)</th>
+                <th className="p-3 w-36">Unit Type</th>
+                <th className="p-3 w-36">Default MOQ</th>
+                <th className="p-3 w-44">Status</th>
+                <th className="p-3 w-32">Seasonal</th>
+                <th className="p-3 min-w-[220px]">Notes</th>
                 <th className="p-3 w-14"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((it) => (
-                <tr key={it.id} className="border-t border-border">
+                <tr key={it.rowId} className="border-t border-border">
                   <td className="p-3">
                     <Input
-                      value={it.name}
-                      onChange={(e) => updateItem(it.id, { name: e.target.value })}
-                      placeholder="Item name"
+                      value={it.sku}
+                      onChange={(e) => updateItem(it.rowId, { sku: e.target.value, id: e.target.value })}
+                      placeholder="SKU"
+                      className="font-mono text-xs"
                     />
                   </td>
                   <td className="p-3">
-                    <Select value={it.category} onValueChange={(v) => updateItem(it.id, { category: v })}>
+                    <Select value={it.category} onValueChange={(v) => updateItem(it.rowId, { category: v })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -169,23 +249,102 @@ export default function InventoryPage() {
                   </td>
                   <td className="p-3">
                     <Input
-                      type="number"
-                      min="0"
-                      value={it.defaultPrice}
-                      onChange={(e) => updateItem(it.id, { defaultPrice: asNumber(e.target.value) })}
+                      value={it.name}
+                      onChange={(e) => updateItem(it.rowId, { name: e.target.value })}
+                      placeholder="Product name"
                     />
                   </td>
                   <td className="p-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={it.normalSizePrice}
+                      onChange={(e) => updateItem(it.rowId, { normalSizePrice: asNumber(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={it.petitSizePrice}
+                      onChange={(e) => updateItem(it.rowId, { petitSizePrice: asNumber(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-3">
+                    <Select value={it.unitType} onValueChange={(v) => updateItem(it.rowId, { unitType: v })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {UNIT_TYPES.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="p-3">
+                    <Input
+                      type="number"
+                      min="0"
+                      value={it.defaultMoq}
+                      onChange={(e) => updateItem(it.rowId, { defaultMoq: asNumber(e.target.value) })}
+                    />
+                  </td>
+                  <td className="p-3">
+                    <Select
+                      value={it.status}
+                      onValueChange={(v) => {
+                        const nextStatus = v
+                        if (nextStatus === "Active (Seasonal)") {
+                          updateItem(it.rowId, { status: nextStatus, seasonal: true })
+                          return
+                        }
+                        // If switching away from seasonal status, seasonal must be off.
+                        updateItem(it.rowId, { status: nextStatus, seasonal: false })
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUSES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </td>
+                  <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <Switch checked={it.defaultSst} onCheckedChange={(v) => updateItem(it.id, { defaultSst: v })} />
-                      <span className="text-xs text-muted-foreground">{it.defaultSst ? "On" : "Off"}</span>
+                      <Switch
+                        checked={it.seasonal}
+                        onCheckedChange={(v) => {
+                          // Seasonal = Yes implies Active (Seasonal)
+                          if (v) {
+                            updateItem(it.rowId, { seasonal: true, status: "Active (Seasonal)" })
+                            return
+                          }
+                          if (!v && it.status === "Active (Seasonal)") {
+                            updateItem(it.rowId, { seasonal: false, status: "Active" })
+                            return
+                          }
+                          updateItem(it.rowId, { seasonal: v })
+                        }}
+                      />
+                      <span className="text-xs text-muted-foreground">{it.seasonal ? "Yes" : "No"}</span>
                     </div>
+                  </td>
+                  <td className="p-3">
+                    <Input value={it.notes} onChange={(e) => updateItem(it.rowId, { notes: e.target.value })} placeholder="Notes" />
                   </td>
                   <td className="p-3">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => removeItem(it.id)}
+                      onClick={() => removeItem(it.rowId)}
                       className="text-muted-foreground hover:text-destructive"
                       title="Delete"
                     >
@@ -196,7 +355,7 @@ export default function InventoryPage() {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td className="p-6 text-center text-muted-foreground" colSpan={5}>
+                  <td className="p-6 text-center text-muted-foreground" colSpan={11}>
                     No items found
                   </td>
                 </tr>

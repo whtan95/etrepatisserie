@@ -114,7 +114,7 @@ export function QuotationPreview({ salesOrder, isEditMode = false, showSave = tr
       setIsSaved(true)
       
       setTimeout(() => {
-        router.push("/portal/scheduling")
+        router.push("/portal/sales-confirmation")
       }, 1500)
     } catch (error) {
       console.error("Failed to save order:", error)
@@ -240,11 +240,7 @@ export function QuotationPreview({ salesOrder, isEditMode = false, showSave = tr
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Quotation Date:</span>
-                  <span className="font-medium">{formatDate(salesOrder.quotationDate)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Expiration Date:</span>
-                  <span className="font-medium">{formatDate(salesOrder.expirationDate)}</span>
+                  <span className="font-medium">{formatDate(salesOrder.orderMeta?.orderDate)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Event Date:</span>
@@ -262,17 +258,21 @@ export function QuotationPreview({ salesOrder, isEditMode = false, showSave = tr
                   <span className="font-medium">{salesOrder.eventData.duration} day(s)</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Setup:</span>
+                  <span className="text-muted-foreground">Preferred Delivery:</span>
                   <span className="font-medium">
-                    {formatDate(salesOrder.eventData.setupDate)} ({salesOrder.customerData.setupTimeSlot || "-"})
+                    {formatDate(salesOrder.eventData.customerPreferredSetupDate)} ({salesOrder.customerData.setupTimeSlot || "-"})
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Dismantle:</span>
-                  <span className="font-medium">
-                    {formatDate(salesOrder.eventData.dismantleDate)} ({salesOrder.customerData.dismantleTimeSlot || "-"})
-                  </span>
-                </div>
+                {((salesOrder.orderSource === "ad-hoc"
+                  ? salesOrder.adHocOptions?.requiresDismantle
+                  : salesOrder.eventData?.dismantleRequired) ?? true) && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Preferred Dismantle:</span>
+                    <span className="font-medium">
+                      {formatDate(salesOrder.eventData.customerPreferredDismantleDate)} ({salesOrder.customerData.dismantleTimeSlot || "-"})
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -428,11 +428,11 @@ export function QuotationPreview({ salesOrder, isEditMode = false, showSave = tr
         <div className="mt-4 flex justify-end">
           <Button
             type="button"
-            onClick={() => router.push("/portal/scheduling")}
+            onClick={() => router.push("/portal/sales-confirmation")}
             disabled={!isSaved}
             className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            Proceed to Scheduling
+            Proceed to Sales Confirmation
           </Button>
         </div>
       )}

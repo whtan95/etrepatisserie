@@ -21,12 +21,14 @@ export async function PUT(req: Request) {
     const body = await req.json().catch(() => ({}))
     const inventoryPayload =
       body?.inventory ??
-      (Array.isArray(body?.items) ? { items: body.items } : body) ??
+      (Array.isArray(body?.items) ? { version: body?.version, items: body.items, updatedAt: body?.updatedAt } : body) ??
       {}
 
     // `normalizeInventoryDb` expects `{ items: [...] }`. If caller sends the items array directly,
     // wrap it so we don't accidentally reset to defaults.
-    const candidate = Array.isArray(inventoryPayload) ? { items: inventoryPayload } : inventoryPayload
+    const candidate = Array.isArray(inventoryPayload)
+      ? { version: body?.version, items: inventoryPayload, updatedAt: body?.updatedAt }
+      : inventoryPayload
     const normalized = normalizeInventoryDb(candidate)
     const saved = await updateInventoryDb(normalized.items)
     return NextResponse.json({ success: true, inventory: saved })

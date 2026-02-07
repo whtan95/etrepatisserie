@@ -229,7 +229,7 @@ export default function OtherAdhocPage() {
   return (
     <div className="space-y-6">
       <OrderProgress
-        currentStep="other-adhoc"
+        currentStatus={selectedOrder?.status}
         orderNumber={selectedOrder?.orderNumber}
         hasIssue={selectedOrder?.hasIssue}
         orderSource={selectedOrder?.orderSource}

@@ -67,44 +67,56 @@ const sidebarItems: SidebarItem[] = [
     ],
   },
   {
-    title: "Sales Order",
-    href: "/portal/sales-order",
+    title: "Quotation",
     icon: FileText,
+    children: [
+      {
+        title: "Sales Quotation",
+        href: "/portal/sales-order",
+        icon: FileText,
+      },
+      {
+        title: "Adhoc Quotation",
+        href: "/portal/ad-hoc",
+        icon: Sparkles,
+      },
+    ],
   },
   {
-    title: "Ad Hoc Order",
-    href: "/portal/ad-hoc",
-    icon: Sparkles,
+    title: "Sales Confirmation",
+    href: "/portal/sales-confirmation",
+    icon: CheckCircle,
   },
   {
-    title: "Scheduling",
-    href: "/portal/scheduling",
-    icon: CalendarClock,
-  },
-  {
-    title: "Packing",
-    href: "/portal/packing",
+    title: "Planning",
+    href: "/portal/planning",
     icon: Package,
   },
   {
-    title: "Setting Up",
-    href: "/portal/setting-up",
-    icon: Wrench,
+    title: "Procurement",
+    href: "/portal/procurement",
+    icon: Boxes,
   },
   {
-    title: "Dismantle",
-    href: "/portal/dismantle",
+    title: "Delivery",
     icon: Truck,
+    children: [
+      {
+        title: "Setup",
+        href: "/portal/setting-up",
+        icon: Wrench,
+      },
+      {
+        title: "Dismantle",
+        href: "/portal/dismantle",
+        icon: Truck,
+      },
+    ],
   },
   {
-    title: "Other Adhoc",
-    href: "/portal/other-adhoc",
-    icon: Sparkles,
-  },
-  {
-    title: "Completed",
-    href: "/portal/completed",
-    icon: CheckCircle,
+    title: "Invoice",
+    href: "/portal/invoice",
+    icon: FileText,
   },
   {
     title: "Warning & Issues",
@@ -150,6 +162,8 @@ export default function PortalLayout({
   const [currentRole, setCurrentRoleState] = useState<UserRole>("User")
   const [filteredSidebarItems, setFilteredSidebarItems] = useState(sidebarItems)
   const [dashboardOpen, setDashboardOpen] = useState(true)
+  const [quotationOpen, setQuotationOpen] = useState(true)
+  const [deliveryOpen, setDeliveryOpen] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(true)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState("application")
@@ -235,14 +249,16 @@ export default function PortalLayout({
   }
 
   const getPageTitle = () => {
-    if (pathname.includes("/sales-order")) return "Sales Order"
-    if (pathname.includes("/ad-hoc")) return "Ad Hoc Order"
-    if (pathname.includes("/scheduling")) return "Scheduling"
-    if (pathname.includes("/packing")) return "Packing"
-    if (pathname.includes("/setting-up")) return "Setting Up"
-    if (pathname.includes("/dismantle")) return "Dismantle"
-    if (pathname.includes("/other-adhoc")) return "Other Adhoc"
-    if (pathname.includes("/completed")) return "Completed"
+    if (pathname.includes("/sales-order")) return "Sales Quotation"
+    if (pathname.includes("/ad-hoc")) return "Adhoc Quotation"
+    if (pathname.includes("/sales-confirmation")) return "Sales Confirmation"
+    if (pathname.includes("/planning")) return "Planning"
+    if (pathname.includes("/packing")) return "Planning"
+    if (pathname.includes("/procurement")) return "Procurement"
+    if (pathname.includes("/setting-up")) return "Delivery (Setup)"
+    if (pathname.includes("/dismantle")) return "Delivery (Dismantle)"
+    if (pathname.includes("/invoice")) return "Invoice"
+    if (pathname.includes("/completed")) return "Invoice"
     if (pathname.includes("/status-tracking")) return "Status Tracking"
     if (pathname.includes("/mapping")) return "Mapping"
     if (pathname.includes("/warnings")) return "Warning & Issues"
@@ -346,6 +362,10 @@ export default function PortalLayout({
               const isOpen =
                 item.title === "Dashboard"
                   ? dashboardOpen
+                  : item.title === "Quotation"
+                    ? quotationOpen
+                    : item.title === "Delivery"
+                      ? deliveryOpen
                   : item.title === "Settings"
                     ? settingsOpen
                     : hasActiveChild
@@ -356,6 +376,8 @@ export default function PortalLayout({
                     type="button"
                     onClick={() => {
                       if (item.title === "Dashboard") setDashboardOpen((v) => !v)
+                      if (item.title === "Quotation") setQuotationOpen((v) => !v)
+                      if (item.title === "Delivery") setDeliveryOpen((v) => !v)
                       if (item.title === "Settings") setSettingsOpen((v) => !v)
                     }}
                     className={cn(

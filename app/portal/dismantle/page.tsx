@@ -40,7 +40,7 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react"
-import type { SalesOrder, IssueData, DismantlePhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
+import type { SalesOrder, IssueData, DismantleData, DismantlePhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import Loading from "./loading"
@@ -238,13 +238,32 @@ export default function DismantlePage() {
   }
 
   const handleSelectOrder = (order: SalesOrder) => {
-    setSelectedOrder(order)
+    const normalized = (() => {
+      if (order.dismantleData) return order
+      const dismantleData: DismantleData = {
+        dismantlePersonnel: "",
+        dismantleDate: "",
+        dismantleStartTime: "",
+        dismantleCompletionTime: "",
+        photos: [],
+        status: "pending",
+        phase: "pending",
+      }
+      updateOrderByNumber(order.orderNumber, (current) => ({
+        ...current,
+        dismantleData,
+        updatedAt: new Date().toISOString(),
+      }))
+      return { ...order, dismantleData }
+    })()
+
+    setSelectedOrder(normalized)
     setShowSetupLog(false)
     setSetupLogMapFailed(false)
     // Determine phase from order data
-    const phase = order.dismantleData?.phase || "pending"
+    const phase = normalized.dismantleData?.phase || "pending"
     setDismantlePhase(phase)
-    setPhotos(order.dismantleData?.photos || [])
+    setPhotos(normalized.dismantleData?.photos || [])
   }
 
   // Start Journey
@@ -452,7 +471,7 @@ export default function DismantlePage() {
     setShowSendBackModal(true)
   }
 
-  const sendBackTo = (target: "setting-up" | "packing" | "scheduling") => {
+  const sendBackTo = (target: "setting-up" | "procurement" | "packing" | "scheduling") => {
     if (!selectedOrder) return
 
     // Ensure timers stop before we clear data / navigate.
@@ -465,16 +484,7 @@ export default function DismantlePage() {
         updatedAt: new Date().toISOString(),
       }
 
-      if (target === "setting-up") {
-        return {
-          ...base,
-          setupData: undefined, // redo accept + journey
-          dismantleData: undefined,
-          otherAdhocData: undefined,
-        }
-      }
-
-      if (target === "packing") {
+      if (target === "setting-up" || target === "procurement" || target === "packing") {
         return {
           ...base,
           setupData: undefined,
@@ -497,8 +507,16 @@ export default function DismantlePage() {
     setDismantlePhase("pending")
     setPhotos([])
     setShowSendBackModal(false)
-    const label = target === "setting-up" ? "Setting Up" : target === "packing" ? "Packing" : "Scheduling"
-    showAlert(`Order sent back to ${label}!`, { title: "Sent Back" })
+    showAlert(
+      target === "setting-up"
+        ? "Order sent back to Delivery (Setup)!"
+        : target === "procurement"
+          ? "Order sent back to Procurement!"
+          : target === "packing"
+            ? "Order sent back to Planning!"
+            : "Order sent back to Sales Confirmation!",
+      { title: "Sent Back" }
+    )
   }
 
   // Complete dismantle
@@ -536,7 +554,7 @@ export default function DismantlePage() {
     if (nextStatus === "other-adhoc") {
       showAlert("Dismantle completed! Order moved to Other Adhoc.", { title: "Updated" })
     } else {
-      showAlert("Dismantle completed! Order marked as Completed.", { title: "Completed" })
+      showAlert("Dismantle completed! Order moved to Invoice.", { title: "Invoice" })
     }
   }
 
@@ -884,10 +902,17 @@ export default function DismantlePage() {
     <Suspense fallback={<Loading />}>
       <div className="space-y-6">
         <OrderProgress
-          currentStep="dismantling"
+          currentStep="delivery-dismantle"
           orderNumber={selectedOrder?.orderNumber}
           hasIssue={selectedOrder?.hasIssue}
           orderSource={selectedOrder?.orderSource}
+          requiresDismantle={
+            selectedOrder
+              ? selectedOrder.orderSource === "ad-hoc"
+                ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+                : selectedOrder.eventData?.dismantleRequired ?? true
+              : undefined
+          }
           adHocOptions={selectedOrder?.adHocOptions}
         />
 
@@ -895,7 +920,7 @@ export default function DismantlePage() {
           {/* Orders List */}
           <div className="lg:col-span-1 border border-border rounded-lg bg-card">
             <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground mb-3">Pending Dismantle</h2>
+              <h2 className="font-semibold text-foreground mb-3">Pending Delivery (Dismantle)</h2>
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
@@ -1700,12 +1725,16 @@ export default function DismantlePage() {
               {selectedOrder && isPhaseRequired(selectedOrder, "packing") && (
                 <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("packing")}>
                   <Undo2 className="h-4 w-4" />
-                  Back to Packing
+                  Back to Planning
                 </Button>
               )}
+              <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("procurement")}>
+                <Undo2 className="h-4 w-4" />
+                Back to Procurement
+              </Button>
               <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("scheduling")}>
                 <Undo2 className="h-4 w-4" />
-                Back to Scheduling
+                Back to Sales Confirmation
               </Button>
             </div>
             <div className="pt-2">

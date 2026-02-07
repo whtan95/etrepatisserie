@@ -18,6 +18,7 @@ import {
 } from "lucide-react"
 import type { SalesOrder } from "@/lib/types"
 import type { InventoryItem } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage } from "@/lib/inventory-storage"
 
 interface SalesOrderPreviewProps {
   salesOrder: SalesOrder
@@ -87,7 +88,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Sales Order - ${salesOrder.orderNumber}</title>
+          <title>Quotation - ${salesOrder.orderNumber}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1a1a1a; }
@@ -196,12 +197,22 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
 
       let enrichedItems = salesOrder.items
       try {
-        const res = await fetch("/api/inventory", { cache: "no-store" })
-        const data = await res.json().catch(() => ({}))
-        const invItems: InventoryItem[] = Array.isArray(data?.inventory?.items) ? data.inventory.items : []
-        if (invItems.length) {
-          const byId = new Map(invItems.map((it) => [it.id, it]))
-          const byName = new Map(invItems.map((it) => [it.name.trim().toLowerCase(), it]))
+        const invItems: InventoryItem[] = (() => {
+          if (hasInventoryDbInLocalStorage()) return getInventoryDbFromLocalStorage().items
+          return []
+        })()
+
+        const fallbackItems: InventoryItem[] = []
+        if (!invItems.length) {
+          const res = await fetch("/api/inventory", { cache: "no-store" })
+          const data = await res.json().catch(() => ({}))
+          fallbackItems.push(...(Array.isArray(data?.inventory?.items) ? data.inventory.items : []))
+        }
+
+        const finalItems = invItems.length ? invItems : fallbackItems
+        if (finalItems.length) {
+          const byId = new Map(finalItems.map((it) => [it.id, it]))
+          const byName = new Map(finalItems.map((it) => [it.name.trim().toLowerCase(), it]))
           enrichedItems = (salesOrder.items || []).map((it) => {
             const currentId = (it as any).inventoryId as string | undefined
             const match =
@@ -268,8 +279,8 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
     }
   }
 
-  const handleProceedToScheduling = () => {
-    router.push("/portal/scheduling")
+  const handleProceedToSalesConfirmation = () => {
+    router.push("/portal/sales-confirmation")
   }
 
   const discountAmount = salesOrder.discount || 0
@@ -299,7 +310,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
               <p className="mt-2 text-sm text-muted-foreground">Malaysia</p>
             </div>
             <div className="text-right">
-              <h2 className="text-3xl font-bold text-foreground">{orderSource === "ad-hoc" ? "AD HOC ORDER" : "SALES ORDER"}</h2>
+              <h2 className="text-3xl font-bold text-foreground">{orderSource === "ad-hoc" ? "ADHOC QUOTATION" : "SALES QUOTATION"}</h2>
               <p className="mt-1 text-lg font-medium text-foreground">{salesOrder.orderNumber}</p>
             </div>
           </div>
@@ -333,7 +344,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sales Order Date:</span>
+                  <span className="text-muted-foreground">Quotation Date:</span>
                   <span className="font-medium">{formatDate(salesOrder.salesOrderDate)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -519,7 +530,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
           {/* Footer */}
           <div className="border-t border-border pt-6 text-center">
             <p className="text-xs text-muted-foreground">
-              This sales order is valid until {formatDate(salesOrder.expirationDate)}
+              This quotation is valid until {formatDate(salesOrder.expirationDate)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               Thank you for choosing Être Patisserie
@@ -531,7 +542,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
 
       {/* Action Buttons - Moved Below */}
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="text-lg font-semibold text-foreground">{orderSource === "ad-hoc" ? "Ad Hoc Order Preview" : "Sales Order Preview"}</h2>
+        <h2 className="text-lg font-semibold text-foreground">{orderSource === "ad-hoc" ? "Adhoc Quotation Preview" : "Sales Quotation Preview"}</h2>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -589,12 +600,12 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
                 </Button>
               )}
               <Button
-                onClick={handleProceedToScheduling}
+                onClick={handleProceedToSalesConfirmation}
                 disabled={!isSaved}
                 className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
               >
                 <ArrowRight className="h-4 w-4" />
-                Proceed to Scheduling
+                Proceed to Sales Confirmation
               </Button>
             </>
           )}

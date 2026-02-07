@@ -13,13 +13,16 @@ export const isAdHocOrder = (order: SalesOrder) => order.orderSource === "ad-hoc
 
 export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderStatus => {
   if (!isAdHocOrder(order)) {
+    const requiresDismantle = order.eventData?.dismantleRequired ?? true
     switch (current) {
       case "scheduling":
         return "packing"
       case "packing":
+        return "procurement"
+      case "procurement":
         return "setting-up"
       case "setting-up":
-        return "dismantling"
+        return requiresDismantle ? "dismantling" : "completed"
       case "dismantling":
         return "completed"
       default:
@@ -38,6 +41,10 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
   }
 
   if (current === "packing") {
+    return "procurement"
+  }
+
+  if (current === "procurement") {
     if (requiresSetup) return "setting-up"
     if (requiresDismantle) return "dismantling"
     if (requiresOtherAdhoc) return "other-adhoc"
@@ -57,7 +64,11 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
 }
 
 export const isPhaseRequired = (order: SalesOrder, phase: "packing" | "setup" | "dismantle" | "other-adhoc") => {
-  if (!isAdHocOrder(order)) return phase !== "other-adhoc"
+  if (!isAdHocOrder(order)) {
+    if (phase === "other-adhoc") return false
+    if (phase === "dismantle") return order.eventData?.dismantleRequired ?? true
+    return true
+  }
   if (phase === "packing") return order.adHocOptions?.requiresPacking ?? true
   if (phase === "setup") return order.adHocOptions?.requiresSetup ?? true
   if (phase === "dismantle") return order.adHocOptions?.requiresDismantle ?? true
@@ -66,13 +77,18 @@ export const isPhaseRequired = (order: SalesOrder, phase: "packing" | "setup" | 
 
 export const getPreviousStatus = (order: SalesOrder, current: OrderStatus): OrderStatus => {
   if (!isAdHocOrder(order)) {
+    const requiresDismantle = order.eventData?.dismantleRequired ?? true
     switch (current) {
       case "packing":
         return "scheduling"
-      case "setting-up":
+      case "procurement":
         return "packing"
+      case "setting-up":
+        return "procurement"
       case "dismantling":
         return "setting-up"
+      case "completed":
+        return requiresDismantle ? "dismantling" : "setting-up"
       case "other-adhoc":
         return "dismantling"
       default:
@@ -86,22 +102,23 @@ export const getPreviousStatus = (order: SalesOrder, current: OrderStatus): Orde
     return "scheduling"
   }
 
+  if (current === "procurement") {
+    return "packing"
+  }
+
   if (current === "setting-up") {
-    if (requiresPacking) return "packing"
-    return "scheduling"
+    return "procurement"
   }
 
   if (current === "dismantling") {
     if (requiresSetup) return "setting-up"
-    if (requiresPacking) return "packing"
-    return "scheduling"
+    return "procurement"
   }
 
   if (current === "other-adhoc") {
     if (requiresDismantle) return "dismantling"
     if (requiresSetup) return "setting-up"
-    if (requiresPacking) return "packing"
-    return "scheduling"
+    return "procurement"
   }
 
   return current

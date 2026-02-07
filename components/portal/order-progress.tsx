@@ -9,11 +9,12 @@ import type { OrderStatus } from "@/lib/types"
 interface OrderProgressProps {
   currentPhase?: number
   currentStatus?: OrderStatus
-  currentStep?: "order" | "scheduling" | "packing" | "setting-up" | "dismantling" | "other-adhoc" | "completed"
+  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "delivery-setup" | "delivery-dismantle" | "invoice"
   orderNumber?: string
   clickable?: boolean
   hasIssue?: boolean
   orderSource?: "sales" | "ad-hoc"
+  requiresDismantle?: boolean
   adHocOptions?: {
     requiresPacking: boolean
     requiresSetup: boolean
@@ -31,52 +32,41 @@ export function OrderProgress({
   clickable = true,
   hasIssue = false,
   orderSource,
+  requiresDismantle,
   adHocOptions,
 }: OrderProgressProps) {
   const router = useRouter()
 
   const allPhases = [
     {
-      key: "order",
-      label: orderSource === "ad-hoc" ? "Ad Hoc Order" : "Sales Order",
+      key: "quotation",
+      label: "Quotation",
       path: orderSource === "ad-hoc" ? "/portal/ad-hoc" : "/portal/sales-order",
     },
-    { key: "scheduling", label: "Scheduling", path: "/portal/scheduling" },
-    { key: "packing", label: "Packing", path: "/portal/packing" },
-    { key: "setting-up", label: "Setting Up", path: "/portal/setting-up" },
-    { key: "dismantling", label: "Dismantle", path: "/portal/dismantle" },
-    { key: "other-adhoc", label: "Other Adhoc", path: "/portal/other-adhoc" },
-    { key: "completed", label: "Completed", path: "/portal/completed" },
+    { key: "sales-confirmation", label: "Sales Confirmation", path: "/portal/sales-confirmation" },
+    { key: "planning", label: "Planning", path: "/portal/planning" },
+    { key: "procurement", label: "Procurement", path: "/portal/procurement" },
+    { key: "delivery-setup", label: "Delivery (Setup)", path: "/portal/setting-up" },
+    { key: "delivery-dismantle", label: "Delivery (Dismantle)", path: "/portal/dismantle" },
+    { key: "invoice", label: "Invoice", path: "/portal/invoice" },
   ] as const
 
+  const resolvedRequiresDismantle = requiresDismantle ?? adHocOptions?.requiresDismantle ?? true
+
   const phases = allPhases.filter((phase) => {
-    if (phase.key === "order" || phase.key === "scheduling" || phase.key === "completed") return true
-
-    if (orderSource !== "ad-hoc") {
-      // Sales flow has no Other Adhoc stage.
-      return phase.key !== "other-adhoc"
-    }
-
-    if (phase.key === "packing") return adHocOptions?.requiresPacking ?? true
-    if (phase.key === "setting-up") return adHocOptions?.requiresSetup ?? true
-    if (phase.key === "dismantling") return adHocOptions?.requiresDismantle ?? true
-    if (phase.key === "other-adhoc") {
-      // Backwards compat for older saved orders
-      return (adHocOptions as any)?.requiresOtherAdhoc ?? (adHocOptions as any)?.requiresPickup ?? false
-    }
-
+    if (phase.key === "delivery-dismantle") return resolvedRequiresDismantle
     return true
   })
 
   const statusToStep = (status: OrderStatus | undefined): OrderProgressProps["currentStep"] => {
     if (!status) return undefined
-    if (status === "draft") return "order"
-    if (status === "scheduling") return "scheduling"
-    if (status === "packing") return "packing"
-    if (status === "setting-up") return "setting-up"
-    if (status === "dismantling") return "dismantling"
-    if (status === "other-adhoc") return "other-adhoc"
-    if (status === "completed") return "completed"
+    if (status === "draft") return "quotation"
+    if (status === "scheduling") return "sales-confirmation"
+    if (status === "packing") return "planning"
+    if (status === "procurement") return "procurement"
+    if (status === "setting-up") return "delivery-setup"
+    if (status === "dismantling") return "delivery-dismantle"
+    if (status === "completed") return "invoice"
     return undefined
   }
 
@@ -108,7 +98,7 @@ export function OrderProgress({
           let bgColor = "bg-muted text-muted-foreground" // Not reached
           if (hasIssue && (isCompleted || isCurrent)) {
             bgColor = "bg-red-500 text-white" // Issue flagged
-          } else if (isAllCompleted && index <= currentPhase) {
+          } else if (isAllCompleted) {
             bgColor = "bg-green-500 text-white" // All completed - green
           } else if (isCompleted) {
             bgColor = "bg-green-500 text-white" // Completed - green
