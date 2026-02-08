@@ -552,9 +552,11 @@ export default function DismantlePage() {
     setDismantlePhase("pending")
     setPhotos([])
     if (nextStatus === "other-adhoc") {
-      showAlert("Dismantle completed! Order moved to Other Adhoc.", { title: "Updated" })
+      showAlert("Returning completed! Order moved to Other Adhoc.", { title: "Updated" })
+      router.push("/portal/other-adhoc")
     } else {
-      showAlert("Dismantle completed! Order moved to Invoice.", { title: "Invoice" })
+      showAlert("Returning completed! Order moved to Invoice.", { title: "Invoice" })
+      router.push("/portal/invoice")
     }
   }
 
@@ -795,7 +797,7 @@ export default function DismantlePage() {
               <div className="flex flex-wrap gap-3">
                 {photos.map((photo, idx) => (
                   <div key={idx} className="relative">
-                    <img src={photo} alt={`Dismantle ${idx + 1}`} className="h-20 w-20 object-cover rounded-lg border border-border" />
+                    <img src={photo} alt={`Returning ${idx + 1}`} className="h-20 w-20 object-cover rounded-lg border border-border" />
                     {dismantlePhase !== "photos_saved" && (
                       <button
                         type="button"
@@ -873,10 +875,10 @@ export default function DismantlePage() {
             {/* Photo Gallery */}
             {photos.length > 0 && (
               <div className="p-4 border-t border-border">
-                <h4 className="font-medium mb-3">Dismantle Photos</h4>
+                <h4 className="font-medium mb-3">Returning Photos</h4>
                 <div className="flex flex-wrap gap-3">
                   {photos.map((photo, idx) => (
-                    <img key={idx} src={photo} alt={`Dismantle ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-border" />
+                    <img key={idx} src={photo} alt={`Returning ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-border" />
                   ))}
                 </div>
               </div>
@@ -886,7 +888,7 @@ export default function DismantlePage() {
             <div className="p-4 border-t border-border">
               <Button onClick={handleDismantleDone} className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
                 <CheckCircle className="h-4 w-4" />
-                Dismantle Done - Complete Order
+                Returning Done - Proceed to Invoice
               </Button>
             </div>
           </div>
@@ -902,7 +904,7 @@ export default function DismantlePage() {
     <Suspense fallback={<Loading />}>
       <div className="space-y-6">
         <OrderProgress
-          currentStep="delivery-dismantle"
+          currentStep="returning"
           orderNumber={selectedOrder?.orderNumber}
           hasIssue={selectedOrder?.hasIssue}
           orderSource={selectedOrder?.orderSource}
@@ -920,7 +922,7 @@ export default function DismantlePage() {
           {/* Orders List */}
           <div className="lg:col-span-1 border border-border rounded-lg bg-card">
             <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground mb-3">Pending Delivery (Dismantle)</h2>
+              <h2 className="font-semibold text-foreground mb-3">Pending Returning</h2>
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
@@ -1002,7 +1004,7 @@ export default function DismantlePage() {
               {filteredOrders.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
                   <Truck className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No orders pending dismantle</p>
+                  <p>No orders pending returning</p>
                 </div>
               ) : (
                   filteredOrders.map((order) => (
@@ -1055,7 +1057,7 @@ export default function DismantlePage() {
                     <div className="text-right text-sm">
                       <p className="flex items-center gap-1 justify-end text-foreground">
                         <Calendar className="h-4 w-4" />
-                        Dismantle: {formatDate(selectedOrder.additionalInfo?.confirmedDismantleDate || selectedOrder.eventData.customerPreferredDismantleDate)}
+                        Returning: {formatDate(selectedOrder.additionalInfo?.confirmedDismantleDate || selectedOrder.eventData.customerPreferredDismantleDate)}
                       </p>
                       <p className="flex items-center gap-1 justify-end text-muted-foreground">
                         <MapPin className="h-4 w-4" />
@@ -1074,7 +1076,7 @@ export default function DismantlePage() {
                           disabled={!selectedOrder.setupData?.gpsTracking?.route?.length}
                         >
                           <FileText className="h-4 w-4" />
-                          See Setup Log
+                          See Delivery Log
                         </Button>
                       </div>
                     </div>
@@ -1084,7 +1086,7 @@ export default function DismantlePage() {
                 {/* Schedule Info from Additional Info - if available */}
                   {selectedOrder.additionalInfo && (
                     <div className="p-4 border-b border-border bg-orange-50">
-                      <h3 className="font-semibold text-orange-900 mb-2">Dismantle Schedule Information</h3>
+                      <h3 className="font-semibold text-orange-900 mb-2">Returning Schedule Information</h3>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-orange-700">Departure:</span>
@@ -1132,7 +1134,7 @@ export default function DismantlePage() {
 
                       {selectedOrder.additionalInfo.dismantleNextAction && (
                         <div className="mt-3 rounded-lg border border-orange-200 bg-white/70 p-3">
-                          <p className="text-xs font-semibold text-orange-800 mb-2">After Dismantle Completion</p>
+                          <p className="text-xs font-semibold text-orange-800 mb-2">After Returning Completion</p>
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                               <span className="text-orange-700">Next:</span>
@@ -1174,7 +1176,7 @@ export default function DismantlePage() {
 
                 {/* Items List - No Prices */}
                 <div className="p-4 border-b border-border">
-                  <h3 className="font-semibold text-foreground mb-3">Items to Dismantle</h3>
+                  <h3 className="font-semibold text-foreground mb-3">Items to Return</h3>
                   <div className="space-y-2">
                     {selectedOrder.packingData?.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm p-2 bg-muted/30 rounded">
@@ -1287,7 +1289,7 @@ export default function DismantlePage() {
               <div className="border border-border rounded-lg bg-card p-12 text-center">
                 <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <h3 className="text-lg font-medium text-foreground mb-2">Select an Order</h3>
-                <p className="text-muted-foreground">Choose an order from the list to record dismantle</p>
+                <p className="text-muted-foreground">Choose an order from the list to record returning</p>
               </div>
             )}
           </div>
@@ -1504,7 +1506,7 @@ export default function DismantlePage() {
         </div>
       )}
 
-      {/* Setup Log Bottom Sheet (non-blocking) */}
+      {/* Delivery Log Bottom Sheet (non-blocking) */}
       {showSetupLog && selectedOrder?.setupData?.gpsTracking?.route?.length ? (
         <div className="fixed inset-0 z-50" onClick={() => setShowSetupLog(false)}>
           <div className="absolute inset-0 bg-black/50" />
@@ -1514,7 +1516,7 @@ export default function DismantlePage() {
           >
             <div className="flex items-center justify-between border-b border-border p-4">
               <div className="min-w-0">
-                <p className="text-sm text-muted-foreground">Setup Log</p>
+                <p className="text-sm text-muted-foreground">Delivery Log</p>
                 <h3 className="truncate text-base font-semibold text-foreground">{selectedOrder.orderNumber}</h3>
               </div>
               <div className="flex gap-2">
@@ -1583,7 +1585,7 @@ export default function DismantlePage() {
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>${escapeHtml(selectedOrder.orderNumber)} - Setup Log</title>
+  <title>${escapeHtml(selectedOrder.orderNumber)} - Delivery Log</title>
   <style>
     body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
     h1 { margin: 0 0 8px; font-size: 18px; }
@@ -1594,7 +1596,7 @@ export default function DismantlePage() {
   </style>
 </head>
 <body>
-  <h1>Setup Log - ${escapeHtml(selectedOrder.orderNumber)}</h1>
+  <h1>Delivery Log - ${escapeHtml(selectedOrder.orderNumber)}</h1>
   <div class="meta">
     Customer: ${escapeHtml(selectedOrder.customerData.customerName)}<br/>
     Started: ${escapeHtml(started)} • Ended: ${escapeHtml(ended)} • Duration: ${escapeHtml(duration)} • Points: ${tracking.route.length}

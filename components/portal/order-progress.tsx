@@ -9,7 +9,7 @@ import type { OrderStatus } from "@/lib/types"
 interface OrderProgressProps {
   currentPhase?: number
   currentStatus?: OrderStatus
-  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "delivery-setup" | "delivery-dismantle" | "invoice"
+  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice"
   orderNumber?: string
   clickable?: boolean
   hasIssue?: boolean
@@ -46,15 +46,16 @@ export function OrderProgress({
     { key: "sales-confirmation", label: "Sales Confirmation", path: "/portal/sales-confirmation" },
     { key: "planning", label: "Planning", path: "/portal/planning" },
     { key: "procurement", label: "Procurement", path: "/portal/procurement" },
-    { key: "delivery-setup", label: "Delivery (Setup)", path: "/portal/setting-up" },
-    { key: "delivery-dismantle", label: "Delivery (Dismantle)", path: "/portal/dismantle" },
+    { key: "packing", label: "Packing", path: "/portal/packing" },
+    { key: "delivery", label: "Delivery", path: "/portal/delivery" },
+    { key: "returning", label: "Returning", path: "/portal/returning" },
     { key: "invoice", label: "Invoice", path: "/portal/invoice" },
   ] as const
 
   const resolvedRequiresDismantle = requiresDismantle ?? adHocOptions?.requiresDismantle ?? true
 
   const phases = allPhases.filter((phase) => {
-    if (phase.key === "delivery-dismantle") return resolvedRequiresDismantle
+    if (phase.key === "returning") return resolvedRequiresDismantle
     return true
   })
 
@@ -62,10 +63,12 @@ export function OrderProgress({
     if (!status) return undefined
     if (status === "draft") return "quotation"
     if (status === "scheduling") return "sales-confirmation"
-    if (status === "packing") return "planning"
+    if (status === "planning") return "planning"
     if (status === "procurement") return "procurement"
-    if (status === "setting-up") return "delivery-setup"
-    if (status === "dismantling") return "delivery-dismantle"
+    if (status === "packing") return "packing"
+    if (status === "setting-up") return "delivery"
+    if (status === "dismantling") return "returning"
+    if (status === "invoice") return "invoice"
     if (status === "completed") return "invoice"
     return undefined
   }

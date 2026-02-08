@@ -9,8 +9,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Calendar, ClipboardList, Search } from "lucide-react"
-import type { MaterialPlanningLine, SalesOrder } from "@/lib/types"
+import { AlertCircle, Calendar, ClipboardList, Search } from "lucide-react"
+import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
 import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
 
@@ -33,6 +33,9 @@ export default function ProcurementPage() {
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [note, setNote] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [flagOpen, setFlagOpen] = useState(false)
+  const [flagPersonnel, setFlagPersonnel] = useState("")
+  const [flagIssue, setFlagIssue] = useState("")
 
   const load = () => {
     const all = getAllOrders().map((o) => ({ ...o, orderSource: o.orderSource || "sales" }))
@@ -72,9 +75,9 @@ export default function ProcurementPage() {
     })
   }, [orders, search])
 
-  const inadequateLines: MaterialPlanningLine[] = useMemo(() => {
+  const purchasingLines: MaterialPlanningLine[] = useMemo(() => {
     if (!selectedOrder?.materialPlanning?.lines) return []
-    return selectedOrder.materialPlanning.lines.filter((l) => l.adequacy === "inadequate")
+    return selectedOrder.materialPlanning.lines.filter((l) => l.purchasingRequired)
   }, [selectedOrder])
 
   const markDone = () => {
@@ -82,20 +85,57 @@ export default function ProcurementPage() {
     setConfirmOpen(true)
   }
 
+  const openFlag = () => {
+    if (!selectedOrder) return
+    setFlagPersonnel("")
+    setFlagIssue("")
+    setFlagOpen(true)
+  }
+
+  const confirmFlag = () => {
+    if (!selectedOrder) return
+    if (!flagPersonnel.trim() || !flagIssue.trim()) {
+      showAlert("Please fill in personnel and issue.", { title: "Missing info", actionText: "OK" })
+      return
+    }
+
+    const issueData: IssueData = {
+      flaggedPersonnel: flagPersonnel.trim(),
+      flaggedIssue: flagIssue.trim(),
+      flaggedDate: new Date().toISOString().split("T")[0],
+      flaggedTime: new Date().toTimeString().slice(0, 5),
+      flaggedAtStage: "procurement",
+      isResolved: false,
+    }
+
+    updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
+      ...order,
+      hasIssue: true,
+      issueData,
+      updatedAt: new Date().toISOString(),
+    }))
+
+    setFlagOpen(false)
+    load()
+    showAlert("Issue flagged.", { title: "Flagged", actionText: "OK" })
+  }
+
   const confirmDone = () => {
     if (!selectedOrder) return
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      status: "setting-up",
+      status: "packing",
       updatedAt: new Date().toISOString(),
-      setupData: order.setupData ?? {
-        setupPersonnel: "",
-        setupDate: "",
-        setupStartTime: "",
-        setupCompletionTime: "",
-        photos: [],
+      packingData: order.packingData ?? {
+        items: (order.items || []).map((it) => ({
+          name: it.name,
+          quantity: it.quantity,
+          packed: false,
+        })),
+        packingPersonnel: "",
+        packingDate: "",
+        packingTime: "",
         status: "pending",
-        phase: "pending",
       },
       materialPlanning: order.materialPlanning
         ? {
@@ -115,9 +155,9 @@ export default function ProcurementPage() {
     }))
 
     setConfirmOpen(false)
-    showAlert("Procurement completed. Sent to Delivery (Setup).", { title: "Done", actionText: "OK" })
+    showAlert("Procurement completed. Sent to Packing.", { title: "Done", actionText: "OK" })
     load()
-    router.push("/portal/setting-up")
+    router.push("/portal/packing")
   }
 
   return (
@@ -126,12 +166,32 @@ export default function ProcurementPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Mark procurement done?"
-        description="This will send the order to Delivery (Setup)."
+        description="This will send the order to Packing."
         confirmText="Yes, send"
         cancelText="Cancel"
         onConfirm={confirmDone}
         onCancel={() => setConfirmOpen(false)}
       />
+      <ConfirmDialog
+        open={flagOpen}
+        title="Flag issue"
+        description="This will send the case to Warning & Issues."
+        confirmText="Flag"
+        cancelText="Cancel"
+        onConfirm={confirmFlag}
+        onCancel={() => setFlagOpen(false)}
+      >
+        <div className="space-y-2">
+          <div className="space-y-1">
+            <Label>Personnel *</Label>
+            <Input value={flagPersonnel} onChange={(e) => setFlagPersonnel(e.target.value)} placeholder="Name" />
+          </div>
+          <div className="space-y-1">
+            <Label>Issue *</Label>
+            <Input value={flagIssue} onChange={(e) => setFlagIssue(e.target.value)} placeholder="What happened?" />
+          </div>
+        </div>
+      </ConfirmDialog>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
@@ -216,15 +276,21 @@ export default function ProcurementPage() {
                     {getDisplayOrderNumber(selectedOrder)} • {selectedOrder.customerData.customerName || "-"} • {selectedOrder.eventData.eventName || "-"}
                   </p>
                 </div>
-                <Button variant="outline" className="bg-transparent" onClick={() => router.push("/portal/planning")}>
-                  Back to Planning
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="bg-transparent" onClick={openFlag} disabled={selectedOrder.hasIssue}>
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    {selectedOrder.hasIssue ? "Issue Flagged" : "Flag Issue"}
+                  </Button>
+                  <Button variant="outline" className="bg-transparent" onClick={() => router.push("/portal/planning")}>
+                    Back to Planning
+                  </Button>
+                </div>
               </div>
 
               <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
-                <h3 className="text-sm font-semibold text-foreground">Missing / Inadequate</h3>
-                {inadequateLines.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No inadequate items were flagged in Planning.</p>
+                <h3 className="text-sm font-semibold text-foreground">Purchasing required</h3>
+                {purchasingLines.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No purchasing required items were flagged in Planning.</p>
                 ) : (
                   <div className="overflow-auto rounded-md border border-border bg-card">
                     <table className="w-full text-sm">
@@ -238,7 +304,7 @@ export default function ProcurementPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {inadequateLines.map((l, idx) => (
+                        {purchasingLines.map((l, idx) => (
                           <tr key={idx} className="border-t border-border">
                             <td className="p-3">{idx + 1}</td>
                             <td className="p-3">{l.category}</td>

@@ -10,12 +10,17 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",
+      "/portal/quotation/webpage-live",
+      "/portal/quotation/official-quotation",
       "/portal/sales-confirmation",
       "/portal/planning",
       "/portal/packing",
       "/portal/procurement",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/setting-up",
       "/portal/dismantle",
       "/portal/invoice",
@@ -29,9 +34,17 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",
+      "/portal/quotation/webpage-live",
+      "/portal/quotation/official-quotation",
       "/portal/sales-confirmation",
+      "/portal/planning",
+      "/portal/packing",
+      "/portal/procurement",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/invoice",
       "/portal/completed",
       "/portal/inventory",
@@ -42,9 +55,12 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
       "/portal/procurement",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/invoice",
       "/portal/completed",
       "/portal/warnings",
@@ -55,8 +71,11 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/setting-up",
       "/portal/dismantle",
       "/portal/invoice",
@@ -68,9 +87,12 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
       "/portal/procurement",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/setting-up",
       "/portal/dismantle",
       "/portal/invoice",
@@ -83,24 +105,34 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     allowedPages: [
       "/portal/status-tracking",
       "/portal/mapping",
+      "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",
+      "/portal/quotation/webpage-live",
+      "/portal/quotation/official-quotation",
       "/portal/sales-confirmation",
       "/portal/planning",
       "/portal/packing",
       "/portal/procurement",
+      "/portal/delivery",
+      "/portal/returning",
       "/portal/setting-up",
       "/portal/dismantle",
       "/portal/invoice",
       "/portal/completed",
       "/portal/warnings",
       "/portal/inventory",
-      "/portal/settings",
     ],
   },
 ]
 
 const ALL_ROLES: UserRole[] = ["Manager", "Sales", "Warehouse", "Traffic", "Operation", "User"]
+
+const MIGRATION_PAGES_BY_ROLE: Partial<Record<UserRole, string[]>> = {
+  Manager: ["/portal/quotation/webpage-live", "/portal/quotation/official-quotation", "/portal/planning", "/portal/packing", "/portal/delivery", "/portal/returning", "/portal/performance-tracking"],
+  Sales: ["/portal/quotation/webpage-live", "/portal/quotation/official-quotation", "/portal/planning", "/portal/packing", "/portal/delivery", "/portal/returning", "/portal/performance-tracking"],
+  User: ["/portal/quotation/webpage-live", "/portal/quotation/official-quotation", "/portal/planning", "/portal/packing", "/portal/delivery", "/portal/returning", "/portal/performance-tracking"],
+}
 
 const normalizeRole = (role: string): UserRole | null => {
   switch (role) {
@@ -143,6 +175,16 @@ const normalizeAccessControl = (value: unknown): RoleAccessControl[] | null => {
       role: normalizedRole,
       allowedPages: allowedPagesRaw.filter((p: unknown) => typeof p === "string"),
     })
+  }
+
+  // Add new default pages to existing stored configs (non-destructive upgrade)
+  for (const role of ALL_ROLES) {
+    const roleConfig = byRole.get(role)
+    const migrationPages = MIGRATION_PAGES_BY_ROLE[role]
+    if (!roleConfig || !migrationPages?.length) continue
+    for (const p of migrationPages) {
+      if (!roleConfig.allowedPages.includes(p)) roleConfig.allowedPages.push(p)
+    }
   }
 
   // Ensure User role always has full access by default

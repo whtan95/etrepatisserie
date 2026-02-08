@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -29,6 +30,7 @@ function formatDate(dateString: string) {
 
 export default function SalesConfirmationPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { alertState, showAlert, closeAlert } = useAppAlert()
 
   const [orders, setOrders] = useState<SalesOrder[]>([])
@@ -36,6 +38,9 @@ export default function SalesConfirmationPage() {
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [salesOrderNumber, setSalesOrderNumber] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [ccRows, setCcRows] = useState<Array<{ department: string; name: string; email: string }>>([
+    { department: "", name: "", email: "" },
+  ])
 
   const load = () => {
     const all = getAllOrders().map((o) => ({ ...o, orderSource: o.orderSource || "sales" }))
@@ -47,6 +52,12 @@ export default function SalesConfirmationPage() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    const order = searchParams.get("order")
+    if (!order) return
+    setSelectedOrderNumber(order)
+  }, [searchParams])
 
   const selectedOrder = useMemo(
     () => orders.find((o) => o.orderNumber === selectedOrderNumber) || null,
@@ -60,6 +71,16 @@ export default function SalesConfirmationPage() {
     }
     setSalesOrderNumber(selectedOrder.orderMeta?.salesOrderNumber || generateSalesOrderNumber())
   }, [selectedOrder])
+
+  useEffect(() => {
+    if (!selectedOrder) return
+    const existing = selectedOrder.orderMeta?.salesConfirmationCc
+    if (existing?.length) {
+      setCcRows(existing.map((r) => ({ department: r.department || "", name: r.name || "", email: r.email || "" })))
+    } else {
+      setCcRows([{ department: "", name: "", email: "" }])
+    }
+  }, [selectedOrderNumber])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -87,12 +108,21 @@ export default function SalesConfirmationPage() {
   const confirm = () => {
     if (!selectedOrder) return
 
+    const ccClean = ccRows
+      .map((r) => ({
+        department: r.department.trim(),
+        name: r.name.trim(),
+        email: r.email.trim(),
+      }))
+      .filter((r) => r.department || r.name || r.email)
+
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      status: "packing",
+      status: "planning",
       orderMeta: {
         ...order.orderMeta,
         salesOrderNumber: salesOrderNumber.trim(),
+        salesConfirmationCc: ccClean.length ? ccClean : undefined,
       },
       updatedAt: new Date().toISOString(),
     }))
@@ -109,12 +139,62 @@ export default function SalesConfirmationPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Confirm quotation?"
-        description="This will generate/attach the Sales Order Number and send the order to Planning."
+        description="This will attach the Sales Order Number and send the order to Planning. Optional: add CC recipients."
         confirmText="Confirm"
         cancelText="Cancel"
         onConfirm={confirm}
         onCancel={() => setConfirmOpen(false)}
-      />
+      >
+        <div className="space-y-3">
+          <div className="text-xs font-semibold text-foreground">CC recipients</div>
+          <div className="space-y-2">
+            {ccRows.map((row, idx) => (
+              <div key={idx} className="grid gap-2 sm:grid-cols-3">
+                <Input
+                  value={row.department}
+                  onChange={(e) =>
+                    setCcRows((prev) => prev.map((r, i) => (i === idx ? { ...r, department: e.target.value } : r)))
+                  }
+                  placeholder="Department"
+                />
+                <Input
+                  value={row.name}
+                  onChange={(e) =>
+                    setCcRows((prev) => prev.map((r, i) => (i === idx ? { ...r, name: e.target.value } : r)))
+                  }
+                  placeholder="Name"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    value={row.email}
+                    onChange={(e) =>
+                      setCcRows((prev) => prev.map((r, i) => (i === idx ? { ...r, email: e.target.value } : r)))
+                    }
+                    placeholder="Email"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={() => setCcRows((prev) => prev.filter((_, i) => i !== idx))}
+                    disabled={ccRows.length <= 1}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="bg-transparent"
+            onClick={() => setCcRows((prev) => [...prev, { department: "", name: "", email: "" }])}
+          >
+            Add CC
+          </Button>
+        </div>
+      </ConfirmDialog>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
@@ -241,4 +321,3 @@ export default function SalesConfirmationPage() {
     </div>
   )
 }
-

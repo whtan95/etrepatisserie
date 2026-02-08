@@ -145,6 +145,8 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
         (salesOrder.customerData as any)?.[`${prefix}${key}`] as string | undefined
 
       const hasCompleteAddress = (prefix: "billing" | "delivery") => {
+        const legacy = ((salesOrder.customerData as any)?.[`${prefix}Address`] as string | undefined || "").trim()
+        if (legacy) return true
         const gateNo = ((salesOrder.customerData as any)?.[`${prefix}AddressGate`] as string | undefined || "").trim()
         const address1 = (getAddrPart(prefix, "Address1") || getAddrPart(prefix, "AddressJalan") || "").trim()
         const postCode = (getAddrPart(prefix, "PostCode") || "").trim()

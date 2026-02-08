@@ -256,23 +256,23 @@ export default function PackingPage() {
     selectedOrder.packingData.items.length > 0 &&
     Object.values(checkedItems).filter(Boolean).length === selectedOrder.packingData.items.length
 
-  const handleSendBackToSalesConfirmation = () => {
+  const handleSendBackToPlanning = () => {
     if (!selectedOrder) return
     setShowSendBackConfirm(true)
   }
 
-  const confirmSendBackToSalesConfirmation = () => {
+  const confirmSendBackToPlanning = () => {
     if (!selectedOrder) return
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      status: "scheduling" as const,
+      status: "planning" as const,
       updatedAt: new Date().toISOString(),
     }))
     loadOrders()
     setSelectedOrder(null)
     setCheckedItems({})
     setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
-    showAlert("Order sent back to Sales Confirmation!", { title: "Sent Back" })
+    showAlert("Order sent back to Planning!", { title: "Sent Back" })
     setShowSendBackConfirm(false)
   }
 
@@ -288,11 +288,6 @@ export default function PackingPage() {
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      materialPlanning: {
-        lines: materialLines.map((l) => ({ ...l })),
-        updatedAt: new Date().toISOString(),
-        confirmedBy: packingInfo.personnel,
-      },
       packingData: {
         ...order.packingData!,
         packingPersonnel: packingInfo.personnel,
@@ -308,7 +303,7 @@ export default function PackingPage() {
     }))
 
     setIsFormLocked(true)
-    showAlert("Planning information saved!", { title: "Saved" })
+    showAlert("Packing information saved!", { title: "Saved" })
     loadOrders()
   }
 
@@ -335,11 +330,6 @@ export default function PackingPage() {
       const base = {
         ...order,
         status: nextStatus,
-        materialPlanning: {
-          lines: materialLines.map((l) => ({ ...l })),
-          updatedAt: new Date().toISOString(),
-          confirmedBy: packingInfo.personnel,
-        },
         packingData: {
           ...order.packingData!,
           packingPersonnel: packingInfo.personnel,
@@ -411,11 +401,11 @@ export default function PackingPage() {
       showAlert("Order moved to Procurement!", { title: "Updated" })
       router.push("/portal/procurement")
     } else if (nextStatus === "setting-up") {
-      showAlert("Order moved to Delivery (Setup)!", { title: "Updated" })
-      router.push("/portal/setting-up")
+      showAlert("Order moved to Delivery!", { title: "Updated" })
+      router.push("/portal/delivery")
     } else if (nextStatus === "dismantling") {
-      showAlert("Order moved to Delivery (Dismantle)!", { title: "Updated" })
-      router.push("/portal/dismantle")
+      showAlert("Order moved to Returning!", { title: "Updated" })
+      router.push("/portal/returning")
     } else if (nextStatus === "other-adhoc") {
       showAlert("Order moved to Other Adhoc!", { title: "Updated" })
       router.push("/portal/other-adhoc")
@@ -459,7 +449,7 @@ export default function PackingPage() {
       <div className="space-y-6">
         {/* Progress Bar */}
         <OrderProgress
-          currentStep="planning"
+          currentStep="packing"
           orderNumber={selectedOrder?.orderNumber}
           hasIssue={selectedOrder?.hasIssue}
           orderSource={selectedOrder?.orderSource}
@@ -477,7 +467,7 @@ export default function PackingPage() {
           {/* Orders List */}
           <div className="lg:col-span-1 border border-border rounded-lg bg-card">
             <div className="p-4 border-b border-border">
-              <h2 className="font-semibold text-foreground mb-3">Orders for Planning</h2>
+              <h2 className="font-semibold text-foreground mb-3">Orders for Packing</h2>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
@@ -922,12 +912,12 @@ export default function PackingPage() {
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={handleSendBackToSalesConfirmation}
+                      onClick={handleSendBackToPlanning}
                       className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
                       disabled={isFormLocked}
                     >
                       <Undo2 className="h-4 w-4" />
-                      Send Back to Sales Confirmation
+                      Send Back to Planning
                     </Button>
                     <Button
                       variant="outline"
@@ -951,11 +941,11 @@ export default function PackingPage() {
                             Edit Information
                           </Button>
                            <Button
-                            onClick={handleProceedToNextStage}
+                           onClick={handleProceedToNextStage}
                             className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                           >
                             <CheckCircle className="h-4 w-4" />
-                            Proceed to Procurement
+                            Proceed to Delivery
                           </Button>
                         </>
                       ) : (
@@ -976,7 +966,7 @@ export default function PackingPage() {
                 <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <h3 className="text-lg font-medium text-foreground mb-2">Select an Order</h3>
                 <p className="text-muted-foreground">
-                  Choose an order from the list to start planning
+                  Choose an order from the list to start packing
                 </p>
               </div>
             )}
@@ -1067,13 +1057,14 @@ export default function PackingPage() {
       onClose={closeAlert}
     />
       <ConfirmDialog
-      open={showSendBackConfirm}
-      title="Send Back to Sales Confirmation"
-      description="Are you sure you want to send this order back to Sales Confirmation?"
-      confirmText="Yes, send back"
-      onConfirm={confirmSendBackToSalesConfirmation}
-      onCancel={() => setShowSendBackConfirm(false)}
-    />
+        open={showSendBackConfirm}
+        title="Send Back to Planning"
+        description="Are you sure you want to send this order back to Planning?"
+        confirmText="Yes, send back"
+        cancelText="Cancel"
+        onConfirm={confirmSendBackToPlanning}
+        onCancel={() => setShowSendBackConfirm(false)}
+      />
     </>
   )
 }

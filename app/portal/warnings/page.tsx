@@ -181,11 +181,14 @@ export default function WarningsPage() {
 
   const getStageLabel = (status: string) => {
     const stages: Record<string, string> = {
-      "draft": "Sales Order",
-      "scheduling": "Scheduling",
+      "draft": "Quotation",
+      "scheduling": "Sales Confirmation",
+      "planning": "Planning",
+      "procurement": "Procurement",
       "packing": "Packing",
-      "setting-up": "Setting Up",
-      "dismantling": "Dismantle",
+      "setting-up": "Delivery",
+      "dismantling": "Returning",
+      "invoice": "Invoice",
       "completed": "Completed",
     }
     return stages[status] || status

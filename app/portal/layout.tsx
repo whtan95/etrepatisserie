@@ -14,13 +14,13 @@ import {
   Truck,
   CheckCircle,
   BarChart3,
+  ExternalLink,
   LogOut,
   Menu,
   X,
   ChevronLeft,
   ChevronDown,
   AlertTriangle,
-  Settings,
   Map,
 } from "lucide-react"
 import {
@@ -33,7 +33,6 @@ import {
 import type { UserRole } from "@/lib/types"
 import { getCurrentRole, setCurrentRole, getAllowedPagesForRole } from "@/lib/role-storage"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import SettingsBootstrap from "@/components/portal/SettingsBootstrap"
 
 type SidebarLinkItem = {
   title: string
@@ -55,7 +54,7 @@ const sidebarItems: SidebarItem[] = [
     icon: BarChart3,
     children: [
       {
-        title: "Status Tracking",
+        title: "Progress Calendar",
         href: "/portal/status-tracking",
         icon: BarChart3,
       },
@@ -64,6 +63,11 @@ const sidebarItems: SidebarItem[] = [
         href: "/portal/mapping",
         icon: Map,
       },
+      {
+        title: "Performance Tracking",
+        href: "/portal/performance-tracking",
+        icon: BarChart3,
+      },
     ],
   },
   {
@@ -71,14 +75,14 @@ const sidebarItems: SidebarItem[] = [
     icon: FileText,
     children: [
       {
-        title: "Sales Quotation",
-        href: "/portal/sales-order",
-        icon: FileText,
+        title: "Webpage live",
+        href: "/portal/quotation/webpage-live",
+        icon: ExternalLink,
       },
       {
-        title: "Adhoc Quotation",
-        href: "/portal/ad-hoc",
-        icon: Sparkles,
+        title: "Official quotation",
+        href: "/portal/quotation/official-quotation",
+        icon: FileText,
       },
     ],
   },
@@ -98,17 +102,22 @@ const sidebarItems: SidebarItem[] = [
     icon: Boxes,
   },
   {
+    title: "Packing",
+    href: "/portal/packing",
+    icon: Package,
+  },
+  {
     title: "Delivery",
     icon: Truck,
     children: [
       {
-        title: "Setup",
-        href: "/portal/setting-up",
-        icon: Wrench,
+        title: "Delivery",
+        href: "/portal/delivery",
+        icon: Truck,
       },
       {
-        title: "Dismantle",
-        href: "/portal/dismantle",
+        title: "Returning",
+        href: "/portal/returning",
         icon: Truck,
       },
     ],
@@ -127,22 +136,6 @@ const sidebarItems: SidebarItem[] = [
     title: "Inventory",
     href: "/portal/inventory",
     icon: Boxes,
-  },
-  {
-    title: "Settings",
-    icon: Settings,
-    children: [
-      {
-        title: "Application Settings",
-        href: "/portal/settings?tab=application",
-        icon: Settings,
-      },
-      {
-        title: "Instruction",
-        href: "/portal/settings?tab=instruction",
-        icon: FileText,
-      },
-    ],
   },
 ]
 
@@ -164,9 +157,7 @@ export default function PortalLayout({
   const [dashboardOpen, setDashboardOpen] = useState(true)
   const [quotationOpen, setQuotationOpen] = useState(true)
   const [deliveryOpen, setDeliveryOpen] = useState(true)
-  const [settingsOpen, setSettingsOpen] = useState(true)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
-  const [settingsTab, setSettingsTab] = useState("application")
 
   const getBaseHref = (href: string) => href.split("?")[0]
 
@@ -182,13 +173,6 @@ export default function PortalLayout({
     const matchesPath = pathname === base || pathname.startsWith(base + "/")
     if (!matchesPath) return false
 
-    // Special: Settings submenu uses query param to indicate active child
-    if (base === "/portal/settings") {
-      const currentTab = (settingsTab || "application").toLowerCase()
-      const hrefTab = (getHrefParam(href, "tab") || "application").toLowerCase()
-      return currentTab === hrefTab
-    }
-
     return true
   }
 
@@ -197,9 +181,7 @@ export default function PortalLayout({
   }, [])
 
   useEffect(() => {
-    if (typeof window === "undefined") return
-    const tab = (new URLSearchParams(window.location.search).get("tab") || "application").toLowerCase()
-    setSettingsTab(tab)
+    // Settings removed
   }, [pathname])
 
   // Load current role on mount
@@ -225,10 +207,24 @@ export default function PortalLayout({
     const isDashboardActive = pathname === "/portal/status-tracking" ||
       pathname.startsWith("/portal/status-tracking/") ||
       pathname === "/portal/mapping" ||
-      pathname.startsWith("/portal/mapping/")
-    const isSettingsActive = pathname === "/portal/settings" || pathname.startsWith("/portal/settings/")
+      pathname.startsWith("/portal/mapping/") ||
+      pathname === "/portal/performance-tracking" ||
+      pathname.startsWith("/portal/performance-tracking/")
+    const isQuotationActive = pathname === "/portal/quotation/official-quotation" ||
+      pathname.startsWith("/portal/quotation/official-quotation/") ||
+      pathname === "/portal/quotation/webpage-live" ||
+      pathname.startsWith("/portal/quotation/webpage-live/")
+    const isDeliveryActive = pathname === "/portal/delivery" ||
+      pathname.startsWith("/portal/delivery/") ||
+      pathname === "/portal/returning" ||
+      pathname.startsWith("/portal/returning/") ||
+      pathname === "/portal/setting-up" ||
+      pathname.startsWith("/portal/setting-up/") ||
+      pathname === "/portal/dismantle" ||
+      pathname.startsWith("/portal/dismantle/")
     if (isDashboardActive) setDashboardOpen(true)
-    if (isSettingsActive) setSettingsOpen(true)
+    if (isQuotationActive) setQuotationOpen(true)
+    if (isDeliveryActive) setDeliveryOpen(true)
   }, [pathname])
 
   const handleRoleChange = (role: UserRole) => {
@@ -249,21 +245,21 @@ export default function PortalLayout({
   }
 
   const getPageTitle = () => {
-    if (pathname.includes("/sales-order")) return "Sales Quotation"
-    if (pathname.includes("/ad-hoc")) return "Adhoc Quotation"
+    if (pathname.includes("/quotation/official-quotation")) return "Official quotation"
+    if (pathname.includes("/quotation/webpage-live")) return "Webpage live"
     if (pathname.includes("/sales-confirmation")) return "Sales Confirmation"
     if (pathname.includes("/planning")) return "Planning"
-    if (pathname.includes("/packing")) return "Planning"
+    if (pathname.includes("/packing")) return "Packing"
     if (pathname.includes("/procurement")) return "Procurement"
-    if (pathname.includes("/setting-up")) return "Delivery (Setup)"
-    if (pathname.includes("/dismantle")) return "Delivery (Dismantle)"
+    if (pathname.includes("/delivery") || pathname.includes("/setting-up")) return "Delivery"
+    if (pathname.includes("/returning") || pathname.includes("/dismantle")) return "Returning"
     if (pathname.includes("/invoice")) return "Invoice"
     if (pathname.includes("/completed")) return "Invoice"
-    if (pathname.includes("/status-tracking")) return "Status Tracking"
+    if (pathname.includes("/status-tracking")) return "Progress Calendar"
     if (pathname.includes("/mapping")) return "Mapping"
+    if (pathname.includes("/performance-tracking")) return "Performance Tracking"
     if (pathname.includes("/warnings")) return "Warning & Issues"
     if (pathname.includes("/inventory")) return "Inventory"
-    if (pathname.includes("/settings")) return "Settings"
     if (pathname === "/portal") return "Dashboard"
     return ""
   }
@@ -366,8 +362,6 @@ export default function PortalLayout({
                     ? quotationOpen
                     : item.title === "Delivery"
                       ? deliveryOpen
-                  : item.title === "Settings"
-                    ? settingsOpen
                     : hasActiveChild
 
               return (
@@ -378,7 +372,6 @@ export default function PortalLayout({
                       if (item.title === "Dashboard") setDashboardOpen((v) => !v)
                       if (item.title === "Quotation") setQuotationOpen((v) => !v)
                       if (item.title === "Delivery") setDeliveryOpen((v) => !v)
-                      if (item.title === "Settings") setSettingsOpen((v) => !v)
                     }}
                     className={cn(
                       "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
@@ -489,7 +482,6 @@ export default function PortalLayout({
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-3 lg:p-4">
-          <SettingsBootstrap />
           {mounted ? children : null}
         </main>
       </div>

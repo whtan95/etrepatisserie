@@ -16,14 +16,18 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
     const requiresDismantle = order.eventData?.dismantleRequired ?? true
     switch (current) {
       case "scheduling":
-        return "packing"
-      case "packing":
+        return "planning"
+      case "planning":
         return "procurement"
       case "procurement":
+        return "packing"
+      case "packing":
         return "setting-up"
       case "setting-up":
-        return requiresDismantle ? "dismantling" : "completed"
+        return requiresDismantle ? "dismantling" : "invoice"
       case "dismantling":
+        return "invoice"
+      case "invoice":
         return "completed"
       default:
         return current
@@ -48,17 +52,19 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
     if (requiresSetup) return "setting-up"
     if (requiresDismantle) return "dismantling"
     if (requiresOtherAdhoc) return "other-adhoc"
-    return "completed"
+    return "invoice"
   }
 
   if (current === "setting-up") {
     if (requiresDismantle) return "dismantling"
-    return requiresOtherAdhoc ? "other-adhoc" : "completed"
+    return requiresOtherAdhoc ? "other-adhoc" : "invoice"
   }
 
-  if (current === "dismantling") return requiresOtherAdhoc ? "other-adhoc" : "completed"
+  if (current === "dismantling") return requiresOtherAdhoc ? "other-adhoc" : "invoice"
 
-  if (current === "other-adhoc") return "completed"
+  if (current === "other-adhoc") return "invoice"
+
+  if (current === "invoice") return "completed"
 
   return current
 }
@@ -79,16 +85,20 @@ export const getPreviousStatus = (order: SalesOrder, current: OrderStatus): Orde
   if (!isAdHocOrder(order)) {
     const requiresDismantle = order.eventData?.dismantleRequired ?? true
     switch (current) {
-      case "packing":
+      case "planning":
         return "scheduling"
       case "procurement":
-        return "packing"
-      case "setting-up":
+        return "planning"
+      case "packing":
         return "procurement"
+      case "setting-up":
+        return "packing"
       case "dismantling":
         return "setting-up"
-      case "completed":
+      case "invoice":
         return requiresDismantle ? "dismantling" : "setting-up"
+      case "completed":
+        return "invoice"
       case "other-adhoc":
         return "dismantling"
       default:

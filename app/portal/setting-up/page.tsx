@@ -560,11 +560,14 @@ export default function SettingUpPage() {
     setSetupPhase("pending")
     setPhotos([])
     if (nextStatus === "dismantling") {
-      showAlert("Setup completed! Order moved to Dismantle.", { title: "Updated" })
+      showAlert("Delivery completed! Order moved to Returning.", { title: "Updated" })
+      router.push("/portal/returning")
     } else if (nextStatus === "other-adhoc") {
-      showAlert("Setup completed! Order moved to Other Adhoc.", { title: "Updated" })
+      showAlert("Delivery completed! Order moved to Other Adhoc.", { title: "Updated" })
+      router.push("/portal/other-adhoc")
     } else {
-      showAlert("Setup completed! Order moved to Invoice.", { title: "Invoice" })
+      showAlert("Delivery completed! Order moved to Invoice.", { title: "Invoice" })
+      router.push("/portal/invoice")
     }
   }
 
@@ -788,7 +791,7 @@ export default function SettingUpPage() {
               <div className="flex flex-wrap gap-3">
                 {photos.map((photo, idx) => (
                   <div key={idx} className="relative">
-                    <img src={photo} alt={`Setup ${idx + 1}`} className="h-20 w-20 object-cover rounded-lg border border-border" />
+                    <img src={photo} alt={`Delivery ${idx + 1}`} className="h-20 w-20 object-cover rounded-lg border border-border" />
                     {setupPhase !== "photos_saved" && (
                       <button
                         type="button"
@@ -866,10 +869,10 @@ export default function SettingUpPage() {
             {/* Photo Gallery */}
             {photos.length > 0 && (
               <div className="p-4 border-t border-border">
-                <h4 className="font-medium mb-3">Setup Photos</h4>
+                <h4 className="font-medium mb-3">Delivery Photos</h4>
                 <div className="flex flex-wrap gap-3">
                   {photos.map((photo, idx) => (
-                    <img key={idx} src={photo} alt={`Setup ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-border" />
+                    <img key={idx} src={photo} alt={`Delivery ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-border" />
                   ))}
                 </div>
               </div>
@@ -882,8 +885,8 @@ export default function SettingUpPage() {
                 {((selectedOrder?.orderSource === "ad-hoc"
                   ? selectedOrder?.adHocOptions?.requiresDismantle
                   : selectedOrder?.eventData?.dismantleRequired) ?? true)
-                  ? "Setup Done - Proceed to Delivery (Dismantle)"
-                  : "Setup Done - Proceed to Invoice"}
+                  ? "Delivery Done - Proceed to Returning"
+                  : "Delivery Done - Proceed to Invoice"}
               </Button>
             </div>
           </div>
@@ -899,7 +902,7 @@ export default function SettingUpPage() {
       <Suspense fallback={null}>
         <div className="space-y-6">
           <OrderProgress
-            currentStep="delivery-setup"
+            currentStep="delivery"
             orderNumber={selectedOrder?.orderNumber}
             hasIssue={selectedOrder?.hasIssue}
             orderSource={selectedOrder?.orderSource}
@@ -917,7 +920,7 @@ export default function SettingUpPage() {
             {/* Orders List */}
             <div className="lg:col-span-1 border border-border rounded-lg bg-card">
               <div className="p-4 border-b border-border">
-                <h2 className="font-semibold text-foreground mb-3">Pending Delivery (Setup)</h2>
+                <h2 className="font-semibold text-foreground mb-3">Pending Delivery</h2>
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
@@ -999,7 +1002,7 @@ export default function SettingUpPage() {
                 {filteredOrders.length === 0 ? (
                   <div className="p-8 text-center text-muted-foreground">
                     <Wrench className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No orders pending setup</p>
+                    <p>No orders pending delivery</p>
                   </div>
                 ) : (
                   filteredOrders.map((order) => (
@@ -1052,7 +1055,7 @@ export default function SettingUpPage() {
                         <div className="text-right text-sm">
                           <p className="flex items-center gap-1 justify-end text-foreground">
                             <Calendar className="h-4 w-4" />
-                            Setup: {formatDate(selectedOrder.additionalInfo?.confirmedSetupDate || selectedOrder.eventData.customerPreferredSetupDate)}
+                            Delivery: {formatDate(selectedOrder.additionalInfo?.confirmedSetupDate || selectedOrder.eventData.customerPreferredSetupDate)}
                           </p>
                           <p className="flex items-center gap-1 justify-end text-muted-foreground">
                             <MapPin className="h-4 w-4" />
@@ -1081,7 +1084,7 @@ export default function SettingUpPage() {
                     {/* Schedule Info from Additional Info - if available */}
                     {selectedOrder.additionalInfo && (
                       <div className="p-4 border-b border-border bg-blue-50">
-                      <h3 className="font-semibold text-blue-900 mb-2">Setup Schedule Information</h3>
+                      <h3 className="font-semibold text-blue-900 mb-2">Delivery Schedule Information</h3>
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <span className="text-blue-700">Departure:</span>
@@ -1129,7 +1132,7 @@ export default function SettingUpPage() {
 
                       {selectedOrder.additionalInfo.setupNextAction && (
                         <div className="mt-3 rounded-lg border border-blue-200 bg-white/70 p-3">
-                          <p className="text-xs font-semibold text-blue-800 mb-2">After Setup Completion</p>
+                          <p className="text-xs font-semibold text-blue-800 mb-2">After Delivery Completion</p>
                           <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
                               <span className="text-blue-700">Next:</span>
@@ -1210,7 +1213,7 @@ export default function SettingUpPage() {
                 <div className="border border-border rounded-lg bg-card p-12 text-center">
                   <Wrench className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                   <h3 className="text-lg font-medium text-foreground mb-2">Select an Order</h3>
-                  <p className="text-muted-foreground">Choose an order from the list to start setup</p>
+                  <p className="text-muted-foreground">Choose an order from the list to start delivery</p>
                 </div>
               )}
             </div>

@@ -6,6 +6,7 @@ interface ConfirmDialogProps {
   open: boolean
   title: string
   description?: string
+  children?: React.ReactNode
   confirmText?: string
   cancelText?: string
   onConfirm: () => void
@@ -16,6 +17,7 @@ export function ConfirmDialog({
   open,
   title,
   description,
+  children,
   confirmText = "Yes",
   cancelText = "Cancel",
   onConfirm,
@@ -30,6 +32,7 @@ export function ConfirmDialog({
           <h3 className="text-lg font-semibold text-foreground">{title}</h3>
           {description && <p className="mt-2 text-sm text-muted-foreground">{description}</p>}
         </div>
+        {children ? <div className="mb-4">{children}</div> : null}
         <div className="flex gap-3">
           <Button variant="outline" className="flex-1 bg-transparent" onClick={onCancel}>
             {cancelText}

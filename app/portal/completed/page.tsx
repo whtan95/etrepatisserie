@@ -410,12 +410,12 @@ export default function CompletedPage() {
                 <p className="text-sm text-muted-foreground">Type: {selectedOrder.eventData.eventType}</p>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Setup</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Delivery</h3>
                 <p className="text-sm text-muted-foreground">By: {selectedOrder.setupData?.setupPersonnel || "-"}</p>
                 <p className="text-sm text-muted-foreground">Completed: {selectedOrder.setupData?.setupCompletionTime || "-"}</p>
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Dismantle</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Returning</h3>
                 <p className="text-sm text-muted-foreground">By: {selectedOrder.dismantleData?.dismantlePersonnel || "-"}</p>
                 <p className="text-sm text-muted-foreground">Completed: {selectedOrder.dismantleData?.dismantleCompletionTime || "-"}</p>
               </div>
@@ -450,8 +450,8 @@ export default function CompletedPage() {
                     <p className="text-sm text-muted-foreground">Personnel: {selectedOrder.additionalInfo?.schedulingPersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.additionalInfo?.schedulingDate || "-"}</p>
                     <p className="text-sm text-muted-foreground">Time: {selectedOrder.additionalInfo?.schedulingTime || "-"}</p>
-                    <p className="text-sm text-muted-foreground">Setup: {selectedOrder.additionalInfo?.confirmedSetupDate || "-"} {selectedOrder.additionalInfo?.scheduleStartTime || ""} {selectedOrder.additionalInfo?.setupLorry ? `(${selectedOrder.additionalInfo.setupLorry})` : ""}</p>
-                    <p className="text-sm text-muted-foreground">Dismantle: {selectedOrder.additionalInfo?.confirmedDismantleDate || "-"} {selectedOrder.additionalInfo?.dismantleScheduleStartTime || ""} {selectedOrder.additionalInfo?.dismantleLorry ? `(${selectedOrder.additionalInfo.dismantleLorry})` : ""}</p>
+                    <p className="text-sm text-muted-foreground">Delivery: {selectedOrder.additionalInfo?.confirmedSetupDate || "-"} {selectedOrder.additionalInfo?.scheduleStartTime || ""} {selectedOrder.additionalInfo?.setupLorry ? `(${selectedOrder.additionalInfo.setupLorry})` : ""}</p>
+                    <p className="text-sm text-muted-foreground">Returning: {selectedOrder.additionalInfo?.confirmedDismantleDate || "-"} {selectedOrder.additionalInfo?.dismantleScheduleStartTime || ""} {selectedOrder.additionalInfo?.dismantleLorry ? `(${selectedOrder.additionalInfo.dismantleLorry})` : ""}</p>
                     <p className="text-sm text-muted-foreground">Other Adhoc: {selectedOrder.additionalInfo?.confirmedOtherAdhocDate || "-"} {selectedOrder.additionalInfo?.otherAdhocScheduleStartTime || ""} {selectedOrder.additionalInfo?.otherAdhocLorry ? `(${selectedOrder.additionalInfo.otherAdhocLorry})` : ""}</p>
                   </div>
                   <div>
@@ -470,14 +470,14 @@ export default function CompletedPage() {
                     <p className="text-sm text-muted-foreground">Time: {selectedOrder.packingData?.packingTime || "-"}</p>
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Setup</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Delivery</h3>
                     <p className="text-sm text-muted-foreground">By: {selectedOrder.setupData?.setupPersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.setupData?.setupDate || "-"}</p>
                     <p className="text-sm text-muted-foreground">Start: {selectedOrder.setupData?.setupStartTime || "-"}</p>
                     <p className="text-sm text-muted-foreground">End: {selectedOrder.setupData?.setupCompletionTime || "-"}</p>
                   </div>
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Dismantle</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Returning</h3>
                     <p className="text-sm text-muted-foreground">By: {selectedOrder.dismantleData?.dismantlePersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.dismantleData?.dismantleDate || "-"}</p>
                     <p className="text-sm text-muted-foreground">Start: {selectedOrder.dismantleData?.dismantleStartTime || "-"}</p>
@@ -522,7 +522,7 @@ export default function CompletedPage() {
                 }}
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Dismantle
+                Send Back to Returning
               </Button>
               <Button
                 variant="outline"
@@ -530,7 +530,7 @@ export default function CompletedPage() {
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Delivery (Setup)
+                Send Back to Delivery
               </Button>
               <Button
                 variant="outline"
