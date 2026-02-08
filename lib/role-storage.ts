@@ -9,7 +9,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "Manager",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",
@@ -33,7 +32,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "Sales",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",
@@ -54,7 +52,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "Warehouse",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
@@ -70,7 +67,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "Traffic",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
@@ -86,7 +82,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "Operation",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/planning",
       "/portal/packing",
@@ -104,7 +99,6 @@ export const DEFAULT_ACCESS_CONTROL: RoleAccessControl[] = [
     role: "User",
     allowedPages: [
       "/portal/status-tracking",
-      "/portal/mapping",
       "/portal/performance-tracking",
       "/portal/sales-order",
       "/portal/ad-hoc",

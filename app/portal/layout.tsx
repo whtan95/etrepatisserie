@@ -21,7 +21,6 @@ import {
   ChevronLeft,
   ChevronDown,
   AlertTriangle,
-  Map,
 } from "lucide-react"
 import {
   Select,
@@ -57,11 +56,6 @@ const sidebarItems: SidebarItem[] = [
         title: "Progress Calendar",
         href: "/portal/status-tracking",
         icon: BarChart3,
-      },
-      {
-        title: "Mapping",
-        href: "/portal/mapping",
-        icon: Map,
       },
       {
         title: "Performance Tracking",
@@ -206,8 +200,6 @@ export default function PortalLayout({
   useEffect(() => {
     const isDashboardActive = pathname === "/portal/status-tracking" ||
       pathname.startsWith("/portal/status-tracking/") ||
-      pathname === "/portal/mapping" ||
-      pathname.startsWith("/portal/mapping/") ||
       pathname === "/portal/performance-tracking" ||
       pathname.startsWith("/portal/performance-tracking/")
     const isQuotationActive = pathname === "/portal/quotation/official-quotation" ||
@@ -256,7 +248,6 @@ export default function PortalLayout({
     if (pathname.includes("/invoice")) return "Invoice"
     if (pathname.includes("/completed")) return "Invoice"
     if (pathname.includes("/status-tracking")) return "Progress Calendar"
-    if (pathname.includes("/mapping")) return "Mapping"
     if (pathname.includes("/performance-tracking")) return "Performance Tracking"
     if (pathname.includes("/warnings")) return "Warning & Issues"
     if (pathname.includes("/inventory")) return "Inventory"

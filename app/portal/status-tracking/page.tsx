@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CalendarDays, List, Search } from "lucide-react"
+import { CalendarDays, LayoutGrid, List, Search } from "lucide-react"
 import type { OrderStatus, SalesOrder } from "@/lib/types"
 import { getAllOrders } from "@/lib/order-storage"
 import FullCalendar from "@fullcalendar/react"
@@ -50,6 +50,19 @@ function getDisplayOrderNumber(order: SalesOrder) {
   return order.orderMeta?.salesOrderNumber || order.orderNumber
 }
 
+function getStageHref(status: OrderStatus): string {
+  if (status === "draft") return "/portal/sales-order"
+  if (status === "scheduling") return "/portal/sales-confirmation"
+  if (status === "planning") return "/portal/planning"
+  if (status === "procurement") return "/portal/procurement"
+  if (status === "packing") return "/portal/packing"
+  if (status === "setting-up") return "/portal/delivery"
+  if (status === "dismantling") return "/portal/returning"
+  if (status === "invoice") return "/portal/invoice"
+  if (status === "completed") return "/portal/completed"
+  return "/portal/status-tracking"
+}
+
 export default function StatusTrackingPage() {
   const [orders, setOrders] = useState<SalesOrder[]>([])
   const [search, setSearch] = useState("")
@@ -58,7 +71,7 @@ export default function StatusTrackingPage() {
 
   useEffect(() => {
     const all = getAllOrders().map((o) => ({ ...o, orderSource: o.orderSource || "sales" }))
-    const active = all.filter((o) => o.status !== "cancelled")
+    const active = all.filter((o) => o.orderSource !== "ad-hoc" && o.status !== "cancelled")
     active.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     setOrders(active)
   }, [])
@@ -115,11 +128,42 @@ export default function StatusTrackingPage() {
       }))
   }, [filtered])
 
+  const boardColumns = useMemo(
+    () =>
+      [
+        { status: "draft", title: "Quotation" },
+        { status: "scheduling", title: "Sales Confirmation" },
+        { status: "planning", title: "Planning" },
+        { status: "procurement", title: "Procurement" },
+        { status: "packing", title: "Packing" },
+        { status: "setting-up", title: "Delivery" },
+        { status: "dismantling", title: "Returning" },
+        { status: "invoice", title: "Invoice" },
+        { status: "completed", title: "Completed" },
+      ] as Array<{ status: OrderStatus; title: string }>,
+    [],
+  )
+
+  const boardByStatus = useMemo(() => {
+    const map = new Map<OrderStatus, SalesOrder[]>()
+    for (const col of boardColumns) map.set(col.status, [])
+    for (const o of filtered) {
+      if (!map.has(o.status)) continue
+      map.get(o.status)!.push(o)
+    }
+    for (const col of boardColumns) {
+      map.get(col.status)!.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    }
+    return map
+  }, [filtered, boardColumns])
+
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-foreground">Progress Calendar</h1>
-        <p className="text-sm text-muted-foreground">Track order counts and see where each order is in the workflow.</p>
+        <h1 className="text-2xl font-semibold text-foreground">Sales Orders</h1>
+        <p className="text-sm text-muted-foreground">
+          Quotation → Sales Confirmation → Planning → Procurement → Packing → Delivery → Returning (optional) → Invoice.
+        </p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-9">
@@ -161,11 +205,87 @@ export default function StatusTrackingPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="calendar">
+      <Tabs defaultValue="board">
         <TabsList>
-          <TabsTrigger value="calendar" className="gap-2"><CalendarDays className="h-4 w-4" />Calendar</TabsTrigger>
+          <TabsTrigger value="board" className="gap-2"><LayoutGrid className="h-4 w-4" />Sales orders</TabsTrigger>
+          <TabsTrigger value="calendar" className="gap-2"><CalendarDays className="h-4 w-4" />Progress calendar</TabsTrigger>
           <TabsTrigger value="list" className="gap-2"><List className="h-4 w-4" />List</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="board" className="mt-4">
+          <div className="w-full overflow-x-auto rounded-lg border border-border bg-card p-4">
+            <div className="flex min-w-max items-center">
+              {boardColumns.map((step, index) => {
+                const isLast = index === boardColumns.length - 1
+                return (
+                  <div key={step.status} className="relative flex flex-col items-center">
+                    <div
+                      className="relative flex h-9 min-w-[140px] items-center justify-center bg-muted px-3 text-xs font-semibold text-muted-foreground sm:h-10 sm:min-w-[160px] sm:text-sm"
+                      style={{
+                        clipPath: isLast
+                          ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)"
+                          : index === 0
+                            ? "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%)"
+                            : "polygon(0 0, calc(100% - 10px) 0, 100% 50%, calc(100% - 10px) 100%, 0 100%, 10px 50%)",
+                      }}
+                    >
+                      {step.title}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <div className="grid min-w-[1200px] grid-cols-9 gap-3">
+              {boardColumns.map((col) => {
+                const list = boardByStatus.get(col.status) || []
+                return (
+                  <div key={col.status} className="rounded-lg border border-border bg-card">
+                    <div className="flex items-center justify-between border-b border-border bg-secondary/30 px-3 py-2">
+                      <div className="text-xs font-semibold text-foreground">{col.title}</div>
+                      <div className="text-xs text-muted-foreground">{list.length}</div>
+                    </div>
+                    <div className="max-h-[520px] space-y-2 overflow-auto p-2">
+                      {list.length === 0 ? (
+                        <div className="rounded-md border border-dashed border-border p-2 text-center text-xs text-muted-foreground">
+                          Empty
+                        </div>
+                      ) : (
+                        list.map((o) => (
+                          <Link
+                            key={o.orderNumber}
+                            href={`${getStageHref(o.status)}?order=${encodeURIComponent(o.orderNumber)}`}
+                            className="block rounded-md border border-border bg-background p-2 hover:bg-secondary/30"
+                            title="Open"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <div className="truncate font-mono text-xs text-foreground">{getDisplayOrderNumber(o)}</div>
+                                <div className="truncate text-xs text-muted-foreground">{o.customerData.customerName || "-"}</div>
+                                <div className="truncate text-xs text-muted-foreground">{o.eventData.eventName || "-"}</div>
+                              </div>
+                              <span
+                                className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
+                                style={{ backgroundColor: statusColor(o.status) }}
+                              >
+                                {STATUS_LABEL[o.status]}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[10px] text-muted-foreground">
+                              Event: {formatDate(o.eventData.eventDate)}
+                            </div>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </TabsContent>
 
         <TabsContent value="calendar" className="mt-4">
           <div className="rounded-lg border border-border bg-card p-3">
@@ -178,22 +298,7 @@ export default function StatusTrackingPage() {
                 const orderNumber = (info.event.extendedProps as any)?.orderNumber as string | undefined
                 const status = (info.event.extendedProps as any)?.status as OrderStatus | undefined
                 if (!orderNumber) return
-                const base =
-                  status === "scheduling"
-                    ? "/portal/sales-confirmation"
-                    : status === "planning"
-                      ? "/portal/planning"
-                      : status === "procurement"
-                        ? "/portal/procurement"
-                        : status === "packing"
-                          ? "/portal/packing"
-                          : status === "setting-up"
-                            ? "/portal/delivery"
-                            : status === "dismantling"
-                              ? "/portal/returning"
-                              : status === "invoice"
-                                ? "/portal/invoice"
-                                : "/portal/completed"
+                const base = getStageHref(status || "draft")
                 window.location.href = `${base}?order=${encodeURIComponent(orderNumber)}`
               }}
             />
@@ -230,21 +335,7 @@ export default function StatusTrackingPage() {
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(o.eventData.eventDate)}</td>
                       <td className="px-4 py-3">
                         <Button asChild variant="outline" className="bg-transparent">
-                          <Link href={`${o.status === "scheduling"
-                            ? "/portal/sales-confirmation"
-                            : o.status === "planning"
-                              ? "/portal/planning"
-                              : o.status === "procurement"
-                                ? "/portal/procurement"
-                                : o.status === "packing"
-                                  ? "/portal/packing"
-                                  : o.status === "setting-up"
-                                    ? "/portal/delivery"
-                                    : o.status === "dismantling"
-                                      ? "/portal/returning"
-                                      : o.status === "invoice"
-                                        ? "/portal/invoice"
-                                        : "/portal/completed"}?order=${encodeURIComponent(o.orderNumber)}`}>
+                          <Link href={`${getStageHref(o.status)}?order=${encodeURIComponent(o.orderNumber)}`}>
                             Open
                           </Link>
                         </Button>
