@@ -166,21 +166,21 @@ export default function StatusTrackingPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-9">
+      <div className="flex flex-wrap gap-1.5 sm:gap-2 lg:grid lg:grid-cols-9">
         {[
-          { label: "Quotation", value: counts.quotation },
-          { label: "Sales Conf.", value: counts.salesConf },
-          { label: "Planning", value: counts.planning },
-          { label: "Procurement", value: counts.procurement },
-          { label: "Packing", value: counts.packing },
-          { label: "Delivery", value: counts.deliveryS },
-          { label: "Returning", value: counts.deliveryD },
-          { label: "Invoice", value: counts.invoice },
+          { label: "Quote", value: counts.quotation },
+          { label: "Conf.", value: counts.salesConf },
+          { label: "Plan", value: counts.planning },
+          { label: "Proc.", value: counts.procurement },
+          { label: "Pack", value: counts.packing },
+          { label: "Deliv.", value: counts.deliveryS },
+          { label: "Return", value: counts.deliveryD },
+          { label: "Inv.", value: counts.invoice },
           { label: "Issues", value: counts.issues },
         ].map((c) => (
-          <div key={c.label} className="rounded-lg border border-border bg-card px-2 py-1.5 sm:px-4 sm:py-3">
-            <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{c.label}</div>
-            <div className="text-base sm:text-lg font-semibold text-foreground">{c.value}</div>
+          <div key={c.label} className="rounded border border-border bg-card px-1.5 py-1 sm:px-3 sm:py-2 text-center min-w-[52px]">
+            <div className="text-[9px] sm:text-xs text-muted-foreground">{c.label}</div>
+            <div className="text-sm sm:text-lg font-semibold text-foreground">{c.value}</div>
           </div>
         ))}
       </div>
