@@ -11,7 +11,7 @@ import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Calendar, CheckCircle, Search } from "lucide-react"
 import type { SalesOrder } from "@/lib/types"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
 
 function generateSalesOrderNumber() {
@@ -39,6 +39,7 @@ export default function SalesConfirmationPage() {
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [salesOrderNumber, setSalesOrderNumber] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [ccRows, setCcRows] = useState<Array<{ department: string; name: string; email: string }>>([
     { department: "", name: "", email: "" },
   ])
@@ -134,6 +135,15 @@ export default function SalesConfirmationPage() {
     router.push("/portal/planning")
   }
 
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrderNumber("")
+    load()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
+  }
+
   return (
     <div className="p-6 space-y-6">
       <OrderProgress currentStep="sales-confirmation" quotationPath="/portal/quotation/official-quotation" />
@@ -197,17 +207,41 @@ export default function SalesConfirmationPage() {
           </Button>
         </div>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this order?"
+        description={selectedOrder ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.` : "Delete this order? This cannot be undone."}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
 
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-foreground">Sales Confirmation</h1>
           <p className="text-sm text-muted-foreground">Confirm quotations and send them to Planning.</p>
         </div>
-        <div className="w-full sm:w-[320px] space-y-1">
-          <Label className="text-xs text-muted-foreground">Search</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Order no, customer, event..." className="pl-9" />
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
+          <div className="w-full sm:w-[320px] space-y-1">
+            <Label className="text-xs text-muted-foreground">Search</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Order no, customer, event..." className="pl-9" />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="bg-transparent" onClick={() => router.push("/portal/quotation/official-quotation")}>
+              Return to Official Quotation
+            </Button>
+            <Button
+              variant="outline"
+              className="bg-transparent text-destructive hover:bg-destructive/10"
+              onClick={() => setDeleteOpen(true)}
+              disabled={!selectedOrder}
+            >
+              Delete
+            </Button>
           </div>
         </div>
       </div>

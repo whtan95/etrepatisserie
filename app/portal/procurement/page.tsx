@@ -11,7 +11,7 @@ import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertCircle, Calendar, ClipboardList, Search } from "lucide-react"
 import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
 
 function formatDate(dateString: string) {
@@ -34,6 +34,7 @@ export default function ProcurementPage() {
   const [note, setNote] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [flagPersonnel, setFlagPersonnel] = useState("")
   const [flagIssue, setFlagIssue] = useState("")
 
@@ -160,6 +161,15 @@ export default function ProcurementPage() {
     router.push("/portal/packing")
   }
 
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrderNumber("")
+    load()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
+  }
+
   return (
     <div className="p-6 space-y-6">
       <AlertDialog {...alertState} onClose={closeAlert} />
@@ -192,6 +202,31 @@ export default function ProcurementPage() {
           </div>
         </div>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this order?"
+        description={selectedOrder ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.` : "Delete this order? This cannot be undone."}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
+
+      <OrderProgress
+        currentStep="procurement"
+        orderNumber={selectedOrder?.orderNumber}
+        hasIssue={selectedOrder?.hasIssue}
+        orderSource={selectedOrder?.orderSource}
+        quotationPath="/portal/quotation/official-quotation"
+        requiresDismantle={
+          selectedOrder
+            ? selectedOrder.orderSource === "ad-hoc"
+              ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+              : selectedOrder.eventData?.dismantleRequired ?? true
+            : undefined
+        }
+        adHocOptions={selectedOrder?.adHocOptions}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
@@ -254,19 +289,6 @@ export default function ProcurementPage() {
             </div>
           ) : (
             <div className="p-6 space-y-6">
-              <OrderProgress
-                currentStatus={selectedOrder.status}
-                orderNumber={selectedOrder.orderNumber}
-                orderSource={selectedOrder.orderSource}
-                quotationPath="/portal/quotation/official-quotation"
-                requiresDismantle={
-                  selectedOrder.orderSource === "ad-hoc"
-                    ? selectedOrder.adHocOptions?.requiresDismantle ?? true
-                    : selectedOrder.eventData?.dismantleRequired ?? true
-                }
-                adHocOptions={selectedOrder.adHocOptions}
-              />
-
               <div className="flex items-center justify-between gap-4">
                 <div className="space-y-1 min-w-0">
                   <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -282,8 +304,19 @@ export default function ProcurementPage() {
                     <AlertCircle className="h-4 w-4 mr-2" />
                     {selectedOrder.hasIssue ? "Issue Flagged" : "Flag Issue"}
                   </Button>
-                  <Button variant="outline" className="bg-transparent" onClick={() => router.push("/portal/planning")}>
-                    Back to Planning
+                  <Button
+                    variant="outline"
+                    className="bg-transparent"
+                    onClick={() => router.push(`/portal/planning?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                  >
+                    Return to Planning
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="bg-transparent text-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Delete
                   </Button>
                 </div>
               </div>

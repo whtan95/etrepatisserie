@@ -5,7 +5,6 @@ import React from "react"
 import type { EventData, EventLocation, VenueType } from "@/lib/quote-webpage/quote-types"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -125,20 +124,6 @@ export function EventDetails({ eventData, setEventData }: EventDetailsProps) {
                 </div>
               </>
             )}
-
-            <div className="md:col-span-2 rounded-lg border border-border bg-secondary/20 p-3">
-              <label className="flex cursor-pointer items-start gap-3">
-                <Checkbox
-                  checked={eventData.returningRequired}
-                  onCheckedChange={(v) =>
-                    setEventData((prev) => ({ ...prev, returningRequired: Boolean(v) }))
-                  }
-                />
-                <span className="text-xs text-foreground">
-                  Returning required (tick if we need to come back to collect / dismantle after delivery)
-                </span>
-              </label>
-            </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="guests" className="flex items-center gap-1.5 text-xs font-semibold text-foreground">

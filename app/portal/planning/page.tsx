@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select"
 import { Calendar, CheckCircle, ClipboardList, Search, Save, Undo2, AlertCircle } from "lucide-react"
 import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
 
 const PLANNING_CATEGORIES = [
@@ -61,6 +61,7 @@ export default function PlanningPage() {
   const [isLocked, setIsLocked] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [flagPersonnel, setFlagPersonnel] = useState("")
   const [flagIssue, setFlagIssue] = useState("")
 
@@ -234,6 +235,15 @@ export default function PlanningPage() {
     showAlert("Issue flagged.", { title: "Flagged", actionText: "OK" })
   }
 
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrderNumber("")
+    load()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
+  }
+
   return (
     <div className="p-6 space-y-6">
       <AlertDialog {...alertState} onClose={closeAlert} />
@@ -266,6 +276,31 @@ export default function PlanningPage() {
           </div>
         </div>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this order?"
+        description={selectedOrder ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.` : "Delete this order? This cannot be undone."}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
+
+      <OrderProgress
+        currentStep="planning"
+        orderNumber={selectedOrder?.orderNumber}
+        hasIssue={selectedOrder?.hasIssue}
+        orderSource={selectedOrder?.orderSource}
+        quotationPath="/portal/quotation/official-quotation"
+        requiresDismantle={
+          selectedOrder
+            ? selectedOrder.orderSource === "ad-hoc"
+              ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+              : selectedOrder.eventData?.dismantleRequired ?? true
+            : undefined
+        }
+        adHocOptions={selectedOrder?.adHocOptions}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
@@ -326,19 +361,6 @@ export default function PlanningPage() {
             <div className="p-10 text-center text-sm text-muted-foreground">Select an order on the left.</div>
           ) : (
             <div className="p-6 space-y-6">
-              <OrderProgress
-                currentStatus={selectedOrder.status}
-                orderNumber={selectedOrder.orderNumber}
-                orderSource={selectedOrder.orderSource}
-                quotationPath="/portal/quotation/official-quotation"
-                requiresDismantle={
-                  selectedOrder.orderSource === "ad-hoc"
-                    ? selectedOrder.adHocOptions?.requiresDismantle ?? true
-                    : selectedOrder.eventData?.dismantleRequired ?? true
-                }
-                adHocOptions={selectedOrder.adHocOptions}
-              />
-
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -354,9 +376,23 @@ export default function PlanningPage() {
                     <Undo2 className="h-4 w-4" />
                     Send back
                   </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2 bg-transparent"
+                    onClick={() => router.push(`/portal/sales-confirmation?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                  >
+                    Return to Sales Confirmation
+                  </Button>
                   <Button variant="outline" className="gap-2 bg-transparent" onClick={openFlag} disabled={selectedOrder.hasIssue}>
                     <AlertCircle className="h-4 w-4" />
                     {selectedOrder.hasIssue ? "Issue Flagged" : "Flag Issue"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2 bg-transparent text-destructive hover:bg-destructive/10"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    Delete
                   </Button>
                 </div>
               </div>

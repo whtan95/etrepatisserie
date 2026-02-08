@@ -13,6 +13,7 @@ import {
   Calendar,
   Eye,
   FileText,
+  ArrowLeft,
   ChevronLeft,
   ChevronRight,
   Undo2,
@@ -25,10 +26,11 @@ import {
 } from "lucide-react"
 import type { SalesOrder, IssueData, SetupData, DismantleData } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 
 export default function CompletedPage() {
+  const router = useRouter()
   const { alertState, showAlert, closeAlert } = useAppAlert()
   const [orders, setOrders] = useState<SalesOrder[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -499,6 +501,14 @@ export default function CompletedPage() {
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-2 pt-4 border-t border-border">
+              <Button
+                variant="outline"
+                onClick={() => router.push(`/portal/invoice?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                className="gap-2 bg-transparent"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Return
+              </Button>
               <Button
                 variant="outline"
                 onClick={openFlagModal}

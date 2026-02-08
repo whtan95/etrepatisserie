@@ -153,6 +153,7 @@ export default function OfficialQuotationDetailPage() {
   const [discountAppliesTo, setDiscountAppliesTo] = useState<"subtotal" | "total">("total")
   const [discountModalOpen, setDiscountModalOpen] = useState(false)
   const [specialRequestModalOpen, setSpecialRequestModalOpen] = useState(false)
+  const [quotationPreviewOpen, setQuotationPreviewOpen] = useState(false)
 
   // Build menu item name lookup
   const menuItemNameById = useMemo(() => {
@@ -775,14 +776,14 @@ export default function OfficialQuotationDetailPage() {
 
       {/* Customer Information (Plain display from web form) */}
       <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="border-b border-border bg-secondary/30 px-6 py-3">
+        <div className="px-6 py-3">
           <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <User className="h-4 w-4" />
             Customer Information
             <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage form)</span>
           </h2>
         </div>
-        <div className="p-4">
+        <div className="px-6 pb-4">
           <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2 lg:grid-cols-3">
             <div className="flex gap-2">
               <dt className="text-muted-foreground whitespace-nowrap">Company:</dt>
@@ -851,6 +852,52 @@ export default function OfficialQuotationDetailPage() {
               <dd className="font-medium">RM{event.budgetPerPersonFromRm || "-"} - {event.budgetPerPersonToRm || "-"}</dd>
             </div>
             <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Location:</dt>
+              <dd className="font-medium">{event.eventLocation || "-"}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      {/* Transport Information (Plain display from web form) */}
+      <div className="rounded-lg border border-border bg-card overflow-hidden">
+        <div className="border-b border-border bg-secondary/30 px-6 py-3">
+          <h2 className="text-sm font-semibold text-foreground">
+            Transport Information
+            <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage form)</span>
+          </h2>
+        </div>
+        <div className="p-4">
+          <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2 lg:grid-cols-4">
+            <div className="flex gap-2 md:col-span-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Delivery address (web):</dt>
+              <dd className="font-medium">{customer.address || "-"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Contact:</dt>
+              <dd className="font-medium">{customer.name || "-"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Phone:</dt>
+              <dd className="font-medium">{customer.phone || "-"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Delivery date:</dt>
+              <dd className="font-medium">{event.takeOutSetupDate || "-"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Event date:</dt>
+              <dd className="font-medium">{event.eventDate || "-"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Returning required:</dt>
+              <dd className="font-medium">{event.returningRequired ? "Yes" : "No"}</dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="text-muted-foreground whitespace-nowrap">Returning date:</dt>
+              <dd className="font-medium">{event.takeOutDismantleDate || "-"}</dd>
+            </div>
+            <div className="flex gap-2 md:col-span-2 lg:col-span-4">
               <dt className="text-muted-foreground whitespace-nowrap">Location:</dt>
               <dd className="font-medium">{event.eventLocation || "-"}</dd>
             </div>
@@ -1315,6 +1362,10 @@ export default function OfficialQuotationDetailPage() {
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3 justify-end print:hidden">
+        <Button variant="outline" onClick={() => setQuotationPreviewOpen(true)} className="gap-2">
+          <FileText className="h-4 w-4" />
+          Generate Quotation
+        </Button>
         <Button variant="outline" onClick={handlePrint} className="gap-2">
           <Printer className="h-4 w-4" />
           Print / PDF
@@ -1408,6 +1459,147 @@ export default function OfficialQuotationDetailPage() {
             </div>
             <div className="mt-4 flex justify-end">
               <Button onClick={() => setDiscountModalOpen(false)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quotation Preview Modal */}
+      {quotationPreviewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-y-auto">
+          <div className="w-full max-w-4xl rounded-lg border border-border bg-white p-0 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card px-6 py-4">
+              <h3 className="text-lg font-semibold">Quotation Preview</h3>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={handlePrint} className="gap-2">
+                  <Printer className="h-4 w-4" />
+                  Print
+                </Button>
+                <button onClick={() => setQuotationPreviewOpen(false)}><X className="h-5 w-5" /></button>
+              </div>
+            </div>
+            <div className="p-8 bg-white text-black">
+              {/* Header */}
+              <div className="mb-8 flex items-start justify-between border-b-4 border-yellow-400 pb-6">
+                <div>
+                  <h1 className="text-2xl font-bold">Être Patisserie</h1>
+                  <p className="text-sm text-gray-500">Artisan Pastry & Bakery</p>
+                  <p className="mt-2 text-sm text-gray-500">Malaysia</p>
+                </div>
+                <div className="text-right">
+                  <h2 className="text-3xl font-bold">QUOTATION</h2>
+                  <p className="mt-1 text-lg font-medium">{item?.id}</p>
+                  <p className="text-sm text-gray-500">{quotationDate}</p>
+                </div>
+              </div>
+
+              {/* Customer & Event Info */}
+              <div className="mb-6 grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Customer Information</h3>
+                  <div className="space-y-1 text-sm">
+                    <p><span className="text-gray-500">Company:</span> {customerData.companyName || customer.companyName || "-"}</p>
+                    <p><span className="text-gray-500">Contact:</span> {customerData.customerName || customer.name || "-"}</p>
+                    <p><span className="text-gray-500">Phone:</span> {customerData.phone || customer.phone || "-"}</p>
+                    <p><span className="text-gray-500">Email:</span> {customerData.email || customer.email || "-"}</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Event Details</h3>
+                  <div className="space-y-1 text-sm">
+                    <p><span className="text-gray-500">Event:</span> {event.eventName || "-"}</p>
+                    <p><span className="text-gray-500">Date:</span> {event.eventDate || "-"}</p>
+                    <p><span className="text-gray-500">Type:</span> {event.eventType || "-"}</p>
+                    <p><span className="text-gray-500">Guests:</span> {event.estimatedGuests || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Addresses */}
+              <div className="mb-6 grid gap-6 md:grid-cols-2">
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Delivery Address</h3>
+                  <p className="text-sm">
+                    {[customerData.deliveryBuildingName, customerData.deliveryAddressGate, customerData.deliveryAddress1, customerData.deliveryAddress2, customerData.deliveryCity, customerData.deliveryPostCode, customerData.deliveryState].filter(Boolean).join(", ") || "-"}
+                  </p>
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Billing Address</h3>
+                  <p className="text-sm">
+                    {[customerData.billingBuildingName, customerData.billingAddressGate, customerData.billingAddress1, customerData.billingAddress2, customerData.billingCity, customerData.billingPostCode, customerData.billingState].filter(Boolean).join(", ") || "-"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              <div className="mb-6">
+                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Order Details</h3>
+                <table className="w-full border-collapse">
+                  <thead className="bg-gray-100">
+                    <tr className="text-xs">
+                      <th className="px-3 py-2 text-left font-semibold border">Item</th>
+                      <th className="px-3 py-2 text-center font-semibold border">Qty</th>
+                      <th className="px-3 py-2 text-right font-semibold border">Unit Price</th>
+                      <th className="px-3 py-2 text-right font-semibold border">SST (8%)</th>
+                      <th className="px-3 py-2 text-right font-semibold border">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((orderItem, index) => {
+                      const qty = typeof orderItem.quantity === "string" ? parseFloat(orderItem.quantity) : orderItem.quantity
+                      const normalizedQty = Number.isFinite(qty) ? Math.max(0, qty) : 0
+                      const base = normalizedQty * orderItem.unitPrice
+                      const sst = orderItem.sstApplied ? base * SST_RATE : 0
+                      const lineTotal = base + sst
+                      return (
+                        <tr key={index} className="text-sm">
+                          <td className="px-3 py-2 border">{orderItem.name}{orderItem.description && <span className="text-gray-500 text-xs ml-1">({orderItem.description})</span>}</td>
+                          <td className="px-3 py-2 text-center border">{normalizedQty}</td>
+                          <td className="px-3 py-2 text-right border">RM {orderItem.unitPrice.toFixed(2)}</td>
+                          <td className="px-3 py-2 text-right border">{sst > 0 ? `RM ${sst.toFixed(2)}` : "-"}</td>
+                          <td className="px-3 py-2 text-right font-medium border">RM {lineTotal.toFixed(2)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Totals */}
+              <div className="ml-auto w-72 space-y-2 text-sm">
+                <div className="flex justify-between border-b pb-1">
+                  <span className="text-gray-500">Subtotal:</span>
+                  <span>RM {subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between border-b pb-1">
+                  <span className="text-gray-500">SST (8%):</span>
+                  <span>RM {sstTotal.toFixed(2)}</span>
+                </div>
+                {discountAmount > 0 && (
+                  <div className="flex justify-between border-b pb-1 text-green-600">
+                    <span>Discount:</span>
+                    <span>- RM {discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between pt-2 text-lg font-bold">
+                  <span>Total:</span>
+                  <span>RM {grandTotal.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Special Request */}
+              {customerData.specialRequest && (
+                <div className="mt-6">
+                  <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider border-b pb-1">Special Request / Notes</h3>
+                  <p className="text-sm bg-gray-50 p-3 rounded">{customerData.specialRequest}</p>
+                </div>
+              )}
+
+              {/* Footer */}
+              <div className="mt-8 border-t pt-4 text-center text-xs text-gray-500">
+                <p>This quotation is valid for 14 days from the date of issue.</p>
+                <p className="mt-1">Thank you for choosing Être Patisserie</p>
+              </div>
             </div>
           </div>
         </div>

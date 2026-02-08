@@ -10,8 +10,10 @@ import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertCircle, Calendar, CheckCircle, FileText, Search } from "lucide-react"
 import type { IssueData, SalesOrder } from "@/lib/types"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { getAllOrders, updateOrderByNumber, deleteOrderByNumber } from "@/lib/order-storage"
+import { getPreviousStatus } from "@/lib/order-flow"
 import { OrderProgress } from "@/components/portal/order-progress"
+import { ArrowLeft, Trash2, Undo2 } from "lucide-react"
 
 function formatDate(dateString: string) {
   if (!dateString) return "-"
@@ -34,6 +36,8 @@ export default function InvoicePage() {
   const [flagOpen, setFlagOpen] = useState(false)
   const [flagPersonnel, setFlagPersonnel] = useState("")
   const [flagIssue, setFlagIssue] = useState("")
+  const [sendBackOpen, setSendBackOpen] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const load = () => {
     const all = getAllOrders().map((o) => ({ ...o, orderSource: o.orderSource || "sales" }))
@@ -64,6 +68,19 @@ export default function InvoicePage() {
     () => orders.find((o) => o.orderNumber === selectedOrderNumber) || null,
     [orders, selectedOrderNumber],
   )
+
+  const returnToPrevious = () => {
+    if (!selectedOrder) return
+    const requiresDismantle =
+      selectedOrder.orderSource === "ad-hoc"
+        ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+        : selectedOrder.eventData?.dismantleRequired ?? true
+    router.push(
+      requiresDismantle
+        ? `/portal/dismantle?order=${encodeURIComponent(selectedOrder.orderNumber)}`
+        : `/portal/setting-up?order=${encodeURIComponent(selectedOrder.orderNumber)}`,
+    )
+  }
 
   const complete = () => {
     if (!selectedOrder) return
@@ -115,6 +132,29 @@ export default function InvoicePage() {
     router.push("/portal/completed")
   }
 
+  const confirmSendBack = () => {
+    if (!selectedOrder) return
+    const prevStatus = getPreviousStatus(selectedOrder, selectedOrder.status)
+    updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
+      ...order,
+      status: prevStatus,
+      updatedAt: new Date().toISOString(),
+    }))
+    setSendBackOpen(false)
+    setSelectedOrderNumber("")
+    showAlert("Order sent back to previous stage.", { title: "Sent Back", actionText: "OK" })
+    load()
+  }
+
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrderNumber("")
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
+    load()
+  }
+
   return (
     <div className="p-6 space-y-6">
       <AlertDialog {...alertState} onClose={closeAlert} />
@@ -147,6 +187,40 @@ export default function InvoicePage() {
           </div>
         </div>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={sendBackOpen}
+        title="Send back to previous stage?"
+        description="This will move the order back to the previous stage."
+        confirmText="Yes, send back"
+        cancelText="Cancel"
+        onConfirm={confirmSendBack}
+        onCancel={() => setSendBackOpen(false)}
+      />
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this order?"
+        description="This action cannot be undone. The order will be permanently deleted."
+        confirmText="Yes, delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
+
+      <OrderProgress
+        currentStep="invoice"
+        orderNumber={selectedOrder?.orderNumber}
+        hasIssue={selectedOrder?.hasIssue}
+        orderSource={selectedOrder?.orderSource}
+        quotationPath="/portal/quotation/official-quotation"
+        requiresDismantle={
+          selectedOrder
+            ? selectedOrder.orderSource === "ad-hoc"
+              ? selectedOrder.adHocOptions?.requiresDismantle ?? true
+              : selectedOrder.eventData?.dismantleRequired ?? true
+            : undefined
+        }
+        adHocOptions={selectedOrder?.adHocOptions}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
@@ -207,19 +281,6 @@ export default function InvoicePage() {
             <div className="p-10 text-center text-sm text-muted-foreground">Select an order on the left.</div>
           ) : (
             <div className="p-6 space-y-6">
-              <OrderProgress
-                currentStatus={selectedOrder.status}
-                orderNumber={selectedOrder.orderNumber}
-                orderSource={selectedOrder.orderSource}
-                quotationPath="/portal/quotation/official-quotation"
-                requiresDismantle={
-                  selectedOrder.orderSource === "ad-hoc"
-                    ? selectedOrder.adHocOptions?.requiresDismantle ?? true
-                    : selectedOrder.eventData?.dismantleRequired ?? true
-                }
-                adHocOptions={selectedOrder.adHocOptions}
-              />
-
               <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <FileText className="h-4 w-4" />
@@ -233,7 +294,21 @@ export default function InvoicePage() {
                 </div>
               </div>
 
-              <div className="flex justify-end">
+              <div className="flex justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" className="bg-transparent gap-2" onClick={returnToPrevious}>
+                    <ArrowLeft className="h-4 w-4" />
+                    Return
+                  </Button>
+                  <Button variant="outline" className="bg-transparent gap-2" onClick={() => setSendBackOpen(true)}>
+                    <Undo2 className="h-4 w-4" />
+                    Send Back
+                  </Button>
+                  <Button variant="outline" className="bg-transparent gap-2 text-destructive hover:bg-destructive/10" onClick={() => setDeleteOpen(true)}>
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                </div>
                 <div className="flex flex-wrap gap-2">
                   <Button variant="outline" className="bg-transparent gap-2" onClick={openFlag} disabled={selectedOrder.hasIssue}>
                     <AlertCircle className="h-4 w-4" />

@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
-  Sparkles,
   FileText,
   CalendarClock,
   Package,
@@ -120,6 +119,11 @@ const sidebarItems: SidebarItem[] = [
     title: "Invoice",
     href: "/portal/invoice",
     icon: FileText,
+  },
+  {
+    title: "Completed",
+    href: "/portal/completed",
+    icon: CheckCircle,
   },
   {
     title: "Warning & Issues",
@@ -246,7 +250,7 @@ export default function PortalLayout({
     if (pathname.includes("/delivery") || pathname.includes("/setting-up")) return "Delivery"
     if (pathname.includes("/returning") || pathname.includes("/dismantle")) return "Returning"
     if (pathname.includes("/invoice")) return "Invoice"
-    if (pathname.includes("/completed")) return "Invoice"
+    if (pathname.includes("/completed")) return "Completed"
     if (pathname.includes("/status-tracking")) return "Progress Calendar"
     if (pathname.includes("/performance-tracking")) return "Performance Tracking"
     if (pathname.includes("/warnings")) return "Warning & Issues"
@@ -282,23 +286,16 @@ export default function PortalLayout({
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
-        {/* Logo Section */}
+        {/* Header Section */}
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
           {!sidebarCollapsed && (
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
-                <Sparkles className="h-5 w-5 text-accent-foreground" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-foreground">Être Patisserie</h1>
-                <p className="text-xs text-muted-foreground">Order Management</p>
-              </div>
+            <div>
+              <h1 className="text-sm font-bold text-foreground">Être Patisserie</h1>
+              <p className="text-xs text-muted-foreground">Order Management</p>
             </div>
           )}
           {sidebarCollapsed && (
-            <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-accent">
-              <Sparkles className="h-5 w-5 text-accent-foreground" />
-            </div>
+            <span className="mx-auto text-sm font-bold text-foreground">ÊP</span>
           )}
           <button
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}

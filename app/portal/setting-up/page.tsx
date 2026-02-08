@@ -1,11 +1,10 @@
 "use client"
 
-import React, { useState, useEffect, Suspense, useRef, useCallback } from "react"
+import React, { useState, useEffect, Suspense, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
@@ -18,48 +17,35 @@ import {
 } from "@/components/ui/select"
 import {
   Search,
-  Wrench,
   ChevronRight,
   Calendar,
   Clock,
   User,
   MapPin,
+  ArrowLeft,
   Undo2,
   CheckCircle,
   Camera,
   X,
   AlertCircle,
-  AlertTriangle,
   Play,
   Square,
-  Navigation,
   Truck,
   Save,
   ArrowUp,
   ArrowDown,
+  Trash2,
 } from "lucide-react"
-import type { SalesOrder, IssueData, SetupData, SetupPhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
+import type { SalesOrder, IssueData, SetupData, SetupPhase } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { getNextStatus } from "@/lib/order-flow"
-import { useSearchParams } from "next/navigation"
-import { useGPSTracking, generateStaticMapUrl, formatTrackingTime, formatTrackingDuration } from "@/hooks/use-gps-tracking"
-import { getLunchWindowFromLocalStorage, overlapsMinutesWindow, parseHHMMToMinutes } from "@/lib/time-window"
 
 export default function SettingUpPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { alertState, showAlert, closeAlert } = useAppAlert()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [routeMapFailed, setRouteMapFailed] = useState(false)
-
-  const formatLocationLabel = useCallback((point?: GPSPoint | null) => {
-    if (!point) return "Unknown location"
-    const coords = `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`
-    const address = point.fullAddress || point.streetName
-    return address ? `${address} (${coords})` : coords
-  }, [])
 
   // Orders state
   const [orders, setOrders] = useState<SalesOrder[]>([])
@@ -83,21 +69,20 @@ export default function SettingUpPage() {
   const [showEndModal, setShowEndModal] = useState(false)
   const [showFlagModal, setShowFlagModal] = useState(false)
   const [showSendBackModal, setShowSendBackModal] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
-  // Accept form data
-
-  // Start journey form data
+  // Start delivery form data
   const [startData, setStartData] = useState({
     personnel: "",
     date: new Date().toISOString().split("T")[0],
     time: new Date().toTimeString().slice(0, 5),
-    location: null as GPSPoint | null,
   })
 
-  // End journey form data
+  // End delivery form data
   const [endData, setEndData] = useState({
     personnel: "",
-    location: null as GPSPoint | null,
+    date: new Date().toISOString().split("T")[0],
+    time: new Date().toTimeString().slice(0, 5),
   })
 
   // Flag issue data
@@ -106,36 +91,6 @@ export default function SettingUpPage() {
     issue: "",
     date: new Date().toISOString().split("T")[0],
     time: new Date().toTimeString().slice(0, 5),
-  })
-
-  // GPS Tracking
-  const {
-    isTracking,
-    route,
-    currentLocation,
-    error: gpsError,
-    startTracking,
-    resumeTracking,
-    stopTracking,
-    getCurrentLocation,
-    getTrackingData,
-  } = useGPSTracking({
-    onLocationUpdate: (point) => {
-      // Save route updates to order
-      if (selectedOrder) {
-        updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
-          ...order,
-          setupData: {
-            ...order.setupData!,
-            gpsTracking: {
-              ...order.setupData?.gpsTracking,
-              route: [...(order.setupData?.gpsTracking?.route || []), point],
-            } as GPSTrackingData,
-          },
-          updatedAt: new Date().toISOString(),
-        }))
-      }
-    },
   })
 
   useEffect(() => {
@@ -149,16 +104,13 @@ export default function SettingUpPage() {
     setIsLoading(false)
   }
 
-  const isLunchOverlapForOrder = (order: SalesOrder) => {
-    const info = order.additionalInfo
-    if (!info?.scheduleStartTime || !info?.estimatedEndTime) return false
-    const { lunchStartTime, lunchEndTime } = getLunchWindowFromLocalStorage()
-    const lunchStartMins = parseHHMMToMinutes(lunchStartTime)
-    const lunchEndMins = parseHHMMToMinutes(lunchEndTime)
-    const startMins = parseHHMMToMinutes(info.scheduleStartTime)
-    const endMins = parseHHMMToMinutes(info.estimatedEndTime)
-    if (lunchStartMins === null || lunchEndMins === null || startMins === null || endMins === null) return false
-    return overlapsMinutesWindow(startMins, endMins, lunchStartMins, lunchEndMins)
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrder(null)
+    loadOrders()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
   }
 
   const toggleSortOrder = () => {
@@ -257,47 +209,25 @@ export default function SettingUpPage() {
   const handleSelectOrder = (order: SalesOrder) => {
     const normalized = ensureSetupData(order)
     setSelectedOrder(normalized)
-    // Determine phase from order data
     const phase = normalized.setupData?.phase || "pending"
     setSetupPhase(phase)
     setPhotos(normalized.setupData?.photos || [])
   }
 
-  // Start Journey
-  const openStartModal = async () => {
+  // Start Delivery
+  const openStartModal = () => {
     setStartData({
       personnel: selectedOrder?.setupData?.acceptance?.personnel || "",
       date: new Date().toISOString().split("T")[0],
       time: new Date().toTimeString().slice(0, 5),
-      location: null,
     })
     setShowStartModal(true)
-
-    // Get current location
-    const location = await getCurrentLocation()
-    if (location) {
-      setStartData(prev => ({ ...prev, location }))
-    }
   }
 
-  const handleStartJourney = async () => {
+  const handleStartDelivery = () => {
     if (!selectedOrder || !startData.personnel) {
       showAlert("Please fill in all required fields")
       return
-    }
-
-    // Start GPS tracking
-    const startPoint = await startTracking()
-    if (!startPoint) {
-      showAlert("Failed to get GPS location. Please allow location access.")
-      return
-    }
-
-    const journeyStart: JourneyStart = {
-      personnel: startData.personnel,
-      date: startData.date,
-      time: startData.time,
-      startLocation: startPoint,
     }
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
@@ -305,14 +235,9 @@ export default function SettingUpPage() {
       setupData: {
         ...order.setupData!,
         phase: "tracking" as SetupPhase,
-        journeyStart,
-        gpsTracking: {
-          startLocation: startPoint,
-          endLocation: null,
-          route: [startPoint],
-          startedAt: startPoint.timestamp,
-          endedAt: null,
-        },
+        setupPersonnel: startData.personnel,
+        setupDate: startData.date,
+        setupStartTime: startData.time,
       },
       updatedAt: new Date().toISOString(),
     }))
@@ -323,9 +248,8 @@ export default function SettingUpPage() {
       setSelectedOrder(updated)
       setSetupPhase("tracking")
     }
-    setRouteMapFailed(false)
     setShowStartModal(false)
-    showAlert("Journey started! GPS tracking is active.", { title: "Tracking" })
+    showAlert("Delivery started!", { title: "Started" })
   }
 
   // Photo handling
@@ -372,43 +296,28 @@ export default function SettingUpPage() {
     showAlert("Photos saved!", { title: "Saved" })
   }
 
-  // End Journey
-  const openEndModal = async () => {
+  // End Delivery
+  const openEndModal = () => {
     setEndData({
-      personnel: selectedOrder?.setupData?.journeyStart?.personnel || "",
-      location: null,
+      personnel: selectedOrder?.setupData?.setupPersonnel || "",
+      date: new Date().toISOString().split("T")[0],
+      time: new Date().toTimeString().slice(0, 5),
     })
     setShowEndModal(true)
-
-    // Get current location
-    const location = await getCurrentLocation()
-    if (location) {
-      setEndData(prev => ({ ...prev, location }))
-    }
   }
 
-  const handleEndJourney = () => {
+  const handleEndDelivery = () => {
     if (!selectedOrder || !endData.personnel) {
       showAlert("Please fill in all required fields")
       return
     }
 
-    // Stop GPS tracking
-    const endPoint = stopTracking()
-    const trackingData = getTrackingData()
-
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
       setupData: {
         ...order.setupData!,
-        setupCompletionTime: new Date().toTimeString().slice(0, 5),
+        setupCompletionTime: endData.time,
         phase: "completed" as SetupPhase,
-        gpsTracking: {
-          ...order.setupData?.gpsTracking,
-          endLocation: endData.location || endPoint,
-          endedAt: new Date().toISOString(),
-          route: trackingData.route,
-        } as GPSTrackingData,
       },
       updatedAt: new Date().toISOString(),
     }))
@@ -420,7 +329,7 @@ export default function SettingUpPage() {
       setSetupPhase("completed")
     }
     setShowEndModal(false)
-    showAlert("Journey completed!", { title: "Completed" })
+    showAlert("Delivery completed!", { title: "Completed" })
   }
 
   // Flag issue
@@ -471,9 +380,6 @@ export default function SettingUpPage() {
   const sendBackTo = (target: "packing" | "procurement" | "scheduling") => {
     if (!selectedOrder) return
 
-    // Ensure timers stop before we clear data / navigate.
-    stopTracking()
-
     updateOrderByNumber(selectedOrder.orderNumber, (order) => {
       const base = {
         ...order,
@@ -506,7 +412,7 @@ export default function SettingUpPage() {
     setShowSendBackModal(false)
     showAlert(
       target === "packing"
-        ? "Order sent back to Planning!"
+        ? "Order sent back to Packing!"
         : target === "procurement"
           ? "Order sent back to Procurement!"
           : "Order sent back to Sales Confirmation!",
@@ -514,8 +420,8 @@ export default function SettingUpPage() {
     )
   }
 
-  // Complete setup
-  const handleSetupDone = () => {
+  // Complete delivery
+  const handleDeliveryDone = () => {
     if (!selectedOrder) return
 
     const nextStatus = getNextStatus(selectedOrder, "setting-up")
@@ -580,7 +486,6 @@ export default function SettingUpPage() {
     })
   }
 
-  // Get lorry color
   const getLorryColor = (lorryId: string) => {
     const lorry = LORRIES.find(l => l.id === lorryId || l.name === lorryId)
     return lorry?.color || "#888"
@@ -598,67 +503,19 @@ export default function SettingUpPage() {
   const renderPhaseContent = () => {
     if (!selectedOrder) return null
 
-    const acceptance = selectedOrder.setupData?.acceptance
-    const journeyStart = selectedOrder.setupData?.journeyStart
-    const gpsTracking = selectedOrder.setupData?.gpsTracking
-    const displayRoute = isTracking ? route : (gpsTracking?.route || [])
+    const setupData = selectedOrder.setupData
 
-      switch (setupPhase) {
-        case "pending":
-          return (
-            <div className="p-6 text-center">
-              <Navigation className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <h3 className="text-lg font-medium text-foreground mb-2">Ready to Start</h3>
-              <p className="text-muted-foreground mb-6">Team is already assigned. Start the journey when leaving.</p>
-              <Button onClick={openStartModal} size="lg" className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-                <Play className="h-5 w-5" />
-                Start Journey
-              </Button>
-            </div>
-          )
-
-      case "accepted":
+    switch (setupPhase) {
+      case "pending":
         return (
-          <div className="p-4 space-y-4">
-            {/* Acceptance Info */}
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800 dark:text-green-200">Order Accepted</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Personnel:</span>
-                  <span className="ml-2 font-medium">{acceptance?.personnel}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Lorry:</span>
-                  <span
-                    className="ml-2 font-medium px-2 py-0.5 rounded text-white"
-                    style={{ backgroundColor: getLorryColor(acceptance?.lorry || "") }}
-                  >
-                    {LORRIES.find(l => l.id === acceptance?.lorry)?.name || acceptance?.lorry}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date:</span>
-                  <span className="ml-2">{formatDate(acceptance?.acceptedDate || "")}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Time:</span>
-                  <span className="ml-2">{acceptance?.acceptedTime}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Start Journey Button */}
-            <div className="text-center py-6">
-              <Button onClick={openStartModal} size="lg" className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-                <Play className="h-5 w-5" />
-                Start Journey
-              </Button>
-              <p className="text-sm text-muted-foreground mt-2">Click when leaving the hub</p>
-            </div>
+          <div className="p-6 text-center">
+            <Truck className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+            <h3 className="text-lg font-medium text-foreground mb-2">Ready to Start Delivery</h3>
+            <p className="text-muted-foreground mb-6">Click the button below to start the delivery.</p>
+            <Button onClick={openStartModal} size="lg" className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
+              <Play className="h-5 w-5" />
+              Start Delivery
+            </Button>
           </div>
         )
 
@@ -666,121 +523,30 @@ export default function SettingUpPage() {
       case "photos_saved":
         return (
           <div className="space-y-4">
-            {/* Tracking Banner */}
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse" />
-                <span className="font-medium text-red-800 dark:text-red-200">
-                  {isTracking ? "Tracking Active" : "Tracking Paused"}
-                </span>
-                <span className="text-sm text-red-600 dark:text-red-300">
-                  ({displayRoute.length} points)
-                </span>
+            {/* Delivery Started Info */}
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center gap-2 mb-2">
+                <Truck className="h-5 w-5 text-blue-600" />
+                <span className="font-medium text-blue-800 dark:text-blue-200">Delivery In Progress</span>
               </div>
-              <div className="flex gap-2">
-                {!isTracking && (
-                  <Button
-                    onClick={async () => {
-                      if (!selectedOrder?.setupData?.gpsTracking?.route?.length) {
-                        showAlert("No existing tracking data to resume. Start Journey again.", { title: "Tracking" })
-                        return
-                      }
-                      const point = await resumeTracking(selectedOrder.setupData.gpsTracking.route)
-                      if (!point) {
-                        showAlert("Failed to resume tracking. Please allow location access.", { title: "Tracking" })
-                        return
-                      }
-                      setRouteMapFailed(false)
-                      showAlert("Tracking resumed.", { title: "Tracking" })
-                    }}
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 bg-transparent"
-                  >
-                    <Play className="h-4 w-4" />
-                    Continue Tracking
-                  </Button>
-                )}
-                <Button onClick={openEndModal} variant="destructive" size="sm" className="gap-2">
-                  <Square className="h-4 w-4" />
-                  End Journey
-                </Button>
-              </div>
-            </div>
-
-            {/* Journey Start Info */}
-            {journeyStart && (
-              <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-sm">
-                <span className="text-blue-800 dark:text-blue-200">
-                  Started at {journeyStart.time} from {formatLocationLabel(journeyStart.startLocation)}
-                </span>
-              </div>
-            )}
-
-            {gpsError && (
-              <div className="mx-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                {gpsError}
-              </div>
-            )}
-
-            {/* Tracking Log & Map */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-              {/* Tracking Log */}
-              <div className="border border-border rounded-lg">
-                <div className="p-3 border-b border-border bg-muted/30">
-                  <h4 className="font-medium">Tracking Log</h4>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">PIC:</span>
+                  <span className="ml-2 font-medium">{setupData?.setupPersonnel || "-"}</span>
                 </div>
-                <div className="max-h-[300px] overflow-y-auto p-2">
-                  {displayRoute.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-4 text-center">No tracking data yet</p>
-                  ) : (
-                    displayRoute.map((point, idx) => (
-                      <div key={idx} className="flex items-start gap-2 p-2 text-sm border-b border-border last:border-0">
-                        <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <span className="font-medium">{formatTrackingTime(point.timestamp)}</span>
-                          <span className="mx-2">-</span>
-                          <span className="text-muted-foreground">{formatLocationLabel(point)}</span>
-                          {idx === 0 && <span className="ml-2 text-xs text-green-600">(Started)</span>}
-                        </div>
-                      </div>
-                    ))
-                  )}
+                <div>
+                  <span className="text-muted-foreground">Date:</span>
+                  <span className="ml-2">{formatDate(setupData?.setupDate || "")}</span>
                 </div>
-              </div>
-
-              {/* Map */}
-              <div className="border border-border rounded-lg">
-                <div className="p-3 border-b border-border bg-muted/30">
-                  <h4 className="font-medium">Route Map</h4>
-                </div>
-                <div className="p-2">
-                  {displayRoute.length >= 2 && !routeMapFailed ? (
-                    (() => {
-                      const mapUrl = generateStaticMapUrl(displayRoute, 400, 300)
-                      if (!mapUrl) return null
-                      return (
-                        <img
-                          src={mapUrl}
-                          alt="Route map"
-                          className="w-full h-[300px] object-cover rounded"
-                          onError={() => setRouteMapFailed(true)}
-                        />
-                      )
-                    })()
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center bg-muted/30 rounded">
-                      <p className="text-sm text-muted-foreground">
-                        {routeMapFailed ? "Map preview failed to load" : "Map will appear after 2+ points"}
-                      </p>
-                    </div>
-                  )}
+                <div>
+                  <span className="text-muted-foreground">Start Time:</span>
+                  <span className="ml-2">{setupData?.setupStartTime || "-"}</span>
                 </div>
               </div>
             </div>
 
             {/* Photo Upload */}
-            <div className="p-4 border-t border-border">
+            <div className="p-4 border border-border rounded-lg">
               <h4 className="font-medium mb-3 flex items-center gap-2">
                 <Camera className="h-4 w-4" />
                 Photo Proof
@@ -827,11 +593,14 @@ export default function SettingUpPage() {
                   Save Images
                 </Button>
               )}
-              {setupPhase === "photos_saved" && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Photos saved. Click "End Journey" when back at hub.
-                </p>
-              )}
+            </div>
+
+            {/* Complete Delivery Button */}
+            <div className="p-4 border-t border-border">
+              <Button onClick={openEndModal} size="lg" className="w-full gap-2 bg-green-600 text-white hover:bg-green-700">
+                <Square className="h-5 w-5" />
+                Complete Delivery
+              </Button>
             </div>
           </div>
         )
@@ -840,35 +609,34 @@ export default function SettingUpPage() {
         return (
           <div className="space-y-4">
             {/* Completed Banner */}
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2">
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <div className="flex items-center gap-2 mb-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800 dark:text-green-200">Journey Completed</span>
+                <span className="font-medium text-green-800 dark:text-green-200">Delivery Completed</span>
               </div>
-              {gpsTracking?.startedAt && gpsTracking?.endedAt && (
-                <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                  <p>Started: {formatTrackingTime(gpsTracking.startedAt)} at {formatLocationLabel(gpsTracking.startLocation)}</p>
-                  <p>Ended: {formatTrackingTime(gpsTracking.endedAt)} at {formatLocationLabel(gpsTracking.endLocation)}</p>
-                  <p>Duration: {formatTrackingDuration(gpsTracking.startedAt, gpsTracking.endedAt)} | {gpsTracking.route?.length || 0} points</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-muted-foreground">PIC:</span>
+                  <span className="ml-2 font-medium">{setupData?.setupPersonnel || "-"}</span>
                 </div>
-              )}
-            </div>
-
-            {/* Final Map */}
-            {gpsTracking?.route && gpsTracking.route.length >= 2 && (
-              <div className="p-4">
-                <h4 className="font-medium mb-3">Complete Route</h4>
-                <img
-                  src={generateStaticMapUrl(gpsTracking.route, 600, 400)}
-                  alt="Complete route"
-                  className="w-full rounded-lg border border-border"
-                />
+                <div>
+                  <span className="text-muted-foreground">Date:</span>
+                  <span className="ml-2">{formatDate(setupData?.setupDate || "")}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Start Time:</span>
+                  <span className="ml-2">{setupData?.setupStartTime || "-"}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">End Time:</span>
+                  <span className="ml-2">{setupData?.setupCompletionTime || "-"}</span>
+                </div>
               </div>
-            )}
+            </div>
 
             {/* Photo Gallery */}
             {photos.length > 0 && (
-              <div className="p-4 border-t border-border">
+              <div className="p-4 border border-border rounded-lg">
                 <h4 className="font-medium mb-3">Delivery Photos</h4>
                 <div className="flex flex-wrap gap-3">
                   {photos.map((photo, idx) => (
@@ -880,7 +648,7 @@ export default function SettingUpPage() {
 
             {/* Complete Button */}
             <div className="p-4 border-t border-border">
-              <Button onClick={handleSetupDone} className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
+              <Button onClick={handleDeliveryDone} className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
                 <CheckCircle className="h-4 w-4" />
                 {((selectedOrder?.orderSource === "ad-hoc"
                   ? selectedOrder?.adHocOptions?.requiresDismantle
@@ -923,50 +691,6 @@ export default function SettingUpPage() {
               <div className="p-4 border-b border-border">
                 <h2 className="font-semibold text-foreground mb-3">Pending Delivery</h2>
                 <div className="space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground mb-1">Sort By</Label>
-                      <Select value={sortCriteria} onValueChange={(v) => setSortCriteria(v as typeof sortCriteria)}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="eventDate">Event Date</SelectItem>
-                          <SelectItem value="name">Customer Name</SelectItem>
-                          <SelectItem value="orderDate">Order Date</SelectItem>
-                          <SelectItem value="pricing">Pricing</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex items-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={toggleSortOrder}
-                        className="w-full gap-2"
-                        title={sortOrder === "asc" ? "Sort descending" : "Sort ascending"}
-                      >
-                        {sortOrder === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />}
-                        {sortOrder === "asc" ? "Ascending" : "Descending"}
-                      </Button>
-                    </div>
-                    <div>
-                    <Label className="text-xs text-muted-foreground mb-1">Team</Label>
-                    <Select value={lorryFilter} onValueChange={(v) => setLorryFilter(v as typeof lorryFilter)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Teams</SelectItem>
-                        {LORRIES.map((lorry) => (
-                          <SelectItem key={lorry.id} value={lorry.name}>
-                            {lorry.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    </div>
-                  </div>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -991,7 +715,7 @@ export default function SettingUpPage() {
                       Show All
                     </Button>
                     <Button type="button" size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90" onClick={applyDateRange}>
-                      Generate
+                      Apply
                     </Button>
                     <Button type="button" size="sm" variant="outline" className="bg-transparent" onClick={clearDateRange}>
                       Clear
@@ -999,11 +723,11 @@ export default function SettingUpPage() {
                   </div>
                 </div>
               </div>
-              <div className="max-h-[600px] overflow-y-auto">
+
+              <div className="divide-y divide-border max-h-[500px] overflow-y-auto">
                 {filteredOrders.length === 0 ? (
-                  <div className="p-8 text-center text-muted-foreground">
-                    <Wrench className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No orders pending delivery</p>
+                  <div className="p-6 text-center text-muted-foreground">
+                    No orders pending delivery.
                   </div>
                 ) : (
                   filteredOrders.map((order) => (
@@ -1011,30 +735,18 @@ export default function SettingUpPage() {
                       key={order.orderNumber}
                       type="button"
                       onClick={() => handleSelectOrder(order)}
-                      className={`w-full p-4 text-left border-b border-border hover:bg-accent/30 transition-colors ${
-                        selectedOrder?.orderNumber === order.orderNumber ? "bg-accent/50" : ""
-                      } ${isLunchOverlapForOrder(order) ? "bg-yellow-50/60" : ""}`}
+                      className={`w-full p-4 text-left transition-colors hover:bg-muted/50 ${
+                        selectedOrder?.orderNumber === order.orderNumber ? "bg-accent/10" : ""
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-foreground">{order.orderNumber}</p>
-                            {order.setupData?.acceptance && (
-                              <span
-                                className="text-xs px-1.5 py-0.5 rounded text-white"
-                                style={{ backgroundColor: getLorryColor(order.setupData.acceptance.lorry) }}
-                              >
-                                {LORRIES.find(l => l.id === order.setupData?.acceptance?.lorry)?.name?.replace("Lorry ", "")}
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-muted-foreground">{order.customerData.customerName}</p>
-                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(order.eventData.customerPreferredSetupDate)}
-                          </p>
-                        </div>
+                        <span className="font-medium text-foreground">{order.orderNumber}</span>
                         <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <p className="text-sm text-muted-foreground truncate">{order.customerData.customerName}</p>
+                      <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(order.eventData.eventDate)}
                       </div>
                     </button>
                   ))
@@ -1042,446 +754,195 @@ export default function SettingUpPage() {
               </div>
             </div>
 
-            {/* Setup Details */}
-            <div className="lg:col-span-2">
-              {selectedOrder ? (
-                <div className="border border-border rounded-lg bg-card">
-                  {/* Order Info Header */}
-                    <div className="p-4 border-b border-border bg-muted/30">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h2 className="text-xl font-bold text-foreground">{selectedOrder.orderNumber}</h2>
-                          <p className="text-muted-foreground">{selectedOrder.customerData.customerName}</p>
-                        </div>
-                        <div className="text-right text-sm">
-                          <p className="flex items-center gap-1 justify-end text-foreground">
-                            <Calendar className="h-4 w-4" />
-                            Delivery: {formatDate(selectedOrder.additionalInfo?.confirmedSetupDate || selectedOrder.eventData.customerPreferredSetupDate)}
-                          </p>
-                          <p className="flex items-center gap-1 justify-end text-muted-foreground">
-                            <MapPin className="h-4 w-4" />
-                            {selectedOrder.customerData.deliveryAddress || "N/A"}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {!!selectedOrder.customerData?.photos?.length && (
-                      <div className="p-4 border-b border-border bg-muted/10">
-                        <h3 className="font-semibold text-foreground mb-3">Customer Uploaded Photos</h3>
-                        <div className="flex flex-wrap gap-3">
-                          {selectedOrder.customerData.photos.map((photo, idx) => (
-                            <img
-                              key={idx}
-                              src={photo || "/placeholder.svg"}
-                              alt={`Customer upload ${idx + 1}`}
-                              className="h-24 w-24 object-cover rounded-lg border border-border"
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Schedule Info from Additional Info - if available */}
-                    {selectedOrder.additionalInfo && (
-                      <div className="p-4 border-b border-border bg-blue-50">
-                      <h3 className="font-semibold text-blue-900 mb-2">Delivery Schedule Information</h3>
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="text-blue-700">Departure:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.departureFromHub || "Not set"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Arrival:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.confirmedSetupTime || "Not set"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Travel:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {`${selectedOrder.additionalInfo.travelDurationHours || 0}h ${selectedOrder.additionalInfo.travelDurationMinutes || 0}m`}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Distance:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.setupDistanceKm ? `${selectedOrder.additionalInfo.setupDistanceKm} km` : "Not set"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Est. End:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.estimatedEndTime || "Not set"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Team:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.setupLorry || "Not assigned"}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-blue-700">Buffer:</span>
-                          <span className="ml-2 font-medium text-blue-900">
-                            {selectedOrder.additionalInfo.bufferTime ? `${selectedOrder.additionalInfo.bufferTime} mins` : "Not set"}
-                          </span>
-                        </div>
-                      </div>
-
-                      {selectedOrder.additionalInfo.setupNextAction && (
-                        <div className="mt-3 rounded-lg border border-blue-200 bg-white/70 p-3">
-                          <p className="text-xs font-semibold text-blue-800 mb-2">After Delivery Completion</p>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="text-blue-700">Next:</span>
-                              <span className="ml-2 font-medium text-blue-900">
-                                {selectedOrder.additionalInfo.setupNextAction === "warehouse"
-                                  ? "Return to Warehouse"
-                                  : `Next Task (${selectedOrder.additionalInfo.setupNextTaskOrderNumber || "-"})`}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-blue-700">ETA:</span>
-                              <span className="ml-2 font-medium text-blue-900">
-                                {selectedOrder.additionalInfo.setupNextAction === "warehouse"
-                                  ? (selectedOrder.additionalInfo.setupReturnArrivalTime || "Not set")
-                                  : "Not set"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-blue-700">Distance:</span>
-                              <span className="ml-2 font-medium text-blue-900">
-                                {selectedOrder.additionalInfo.setupNextAction === "warehouse" && selectedOrder.additionalInfo.setupReturnDistanceKm
-                                  ? `${selectedOrder.additionalInfo.setupReturnDistanceKm} km`
-                                  : "Not set"}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-blue-700">Duration:</span>
-                              <span className="ml-2 font-medium text-blue-900">
-                                {selectedOrder.additionalInfo.setupNextAction === "warehouse" && selectedOrder.additionalInfo.setupReturnTravelMins
-                                  ? `${selectedOrder.additionalInfo.setupReturnTravelMins} mins`
-                                  : "Not set"}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Items List */}
+            {/* Order Details */}
+            <div className="lg:col-span-2 border border-border rounded-lg bg-card">
+              {!selectedOrder ? (
+                <div className="flex h-64 items-center justify-center text-muted-foreground">
+                  Select an order to view details
+                </div>
+              ) : (
+                <div>
+                  {/* Order Header */}
                   <div className="p-4 border-b border-border">
-                    <h3 className="font-semibold text-foreground mb-3">Items to Set Up</h3>
-                    <div className="space-y-2">
-                      {selectedOrder.packingData?.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-sm p-2 bg-muted/30 rounded">
-                          <span className="text-foreground">{item.name}</span>
-                          <span className="font-medium text-foreground">x{item.quantity}</span>
-                        </div>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold text-foreground">{selectedOrder.orderNumber}</h3>
+                        <p className="text-sm text-muted-foreground">{selectedOrder.customerData.customerName}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => router.push(`/portal/packing?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                          className="gap-2 bg-transparent"
+                        >
+                          <ArrowLeft className="h-4 w-4" />
+                          Return
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setDeleteOpen(true)}
+                          className="gap-2 bg-transparent text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={openFlagModal} className="gap-2 bg-transparent" disabled={selectedOrder.hasIssue}>
+                          <AlertCircle className="h-4 w-4" />
+                          {selectedOrder.hasIssue ? "Issue Flagged" : "Flag Issue"}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={openSendBackModal} className="gap-2 bg-transparent">
+                          <Undo2 className="h-4 w-4" />
+                          Send Back
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Order Info */}
+                  <div className="p-4 border-b border-border bg-muted/30">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Event Date:</span>
+                        <span className="ml-2 font-medium">{formatDate(selectedOrder.eventData.eventDate)}</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Event:</span>
+                        <span className="ml-2 font-medium">{selectedOrder.eventData.eventName || "-"}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Address:</span>
+                        <span className="ml-2 font-medium">{selectedOrder.customerData.deliveryAddress || "-"}</span>
+                      </div>
                     </div>
                   </div>
 
                   {/* Phase Content */}
                   {renderPhaseContent()}
-
-                  {/* Action Buttons */}
-                  <div className="p-4 border-t border-border flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={openSendBackModal}
-                      className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
-                    >
-                      <Undo2 className="h-4 w-4" />
-                      Send Back
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={openFlagModal}
-                      disabled={selectedOrder?.hasIssue}
-                      className={`gap-2 ${selectedOrder?.hasIssue ? "bg-red-500 text-white hover:bg-red-600 cursor-not-allowed" : "bg-transparent text-amber-600 border-amber-300 hover:bg-amber-50"}`}
-                    >
-                      <AlertCircle className="h-4 w-4" />
-                      {selectedOrder?.hasIssue ? "Issue Flagged" : "Flag Issue"}
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="border border-border rounded-lg bg-card p-12 text-center">
-                  <Wrench className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-                  <h3 className="text-lg font-medium text-foreground mb-2">Select an Order</h3>
-                  <p className="text-muted-foreground">Choose an order from the list to start delivery</p>
                 </div>
               )}
             </div>
           </div>
         </div>
 
-        {/* Start Journey Modal */}
-        {showStartModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowStartModal(false)}>
-            <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <Play className="h-5 w-5 text-blue-500" />
-                  Start Journey - {selectedOrder?.orderNumber}
-                </h3>
-                <button onClick={() => setShowStartModal(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
+        {/* Start Delivery Modal */}
+        <ConfirmDialog
+          open={showStartModal}
+          title="Start Delivery"
+          description="Enter the delivery details to begin."
+          confirmText="Start"
+          cancelText="Cancel"
+          onConfirm={handleStartDelivery}
+          onCancel={() => setShowStartModal(false)}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Person in Charge (PIC) *</Label>
+              <Input value={startData.personnel} onChange={(e) => setStartData(prev => ({ ...prev, personnel: e.target.value }))} placeholder="Name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Date</Label>
+                <Input type="date" value={startData.date} onChange={(e) => setStartData(prev => ({ ...prev, date: e.target.value }))} />
               </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Personnel *</Label>
-                  <Input
-                    value={startData.personnel}
-                    onChange={(e) => setStartData(prev => ({ ...prev, personnel: e.target.value }))}
-                    placeholder="Confirm personnel name"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Date</Label>
-                    <Input type="date" value={startData.date} disabled className="bg-muted" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Time</Label>
-                    <Input type="time" value={startData.time} disabled className="bg-muted" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Current Location</Label>
-                  <div className="p-3 bg-muted rounded-lg">
-                    {startData.location ? (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-green-500" />
-                        <span className="text-sm">{formatLocationLabel(startData.location)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        <span className="text-sm">Getting location...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {gpsError && (
-                  <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 text-sm">
-                    {gpsError}
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowStartModal(false)} className="flex-1 bg-transparent">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleStartJourney}
-                    className="flex-1 gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                    disabled={!startData.personnel}
-                  >
-                    <Play className="h-4 w-4" />
-                    Start Tracking
-                  </Button>
-                </div>
+              <div className="space-y-1">
+                <Label>Time</Label>
+                <Input type="time" value={startData.time} onChange={(e) => setStartData(prev => ({ ...prev, time: e.target.value }))} />
               </div>
             </div>
           </div>
-        )}
+        </ConfirmDialog>
 
-        {/* End Journey Modal */}
-        {showEndModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowEndModal(false)}>
-            <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <Square className="h-5 w-5 text-red-500" />
-                  End Journey - {selectedOrder?.orderNumber}
-                </h3>
-                <button onClick={() => setShowEndModal(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
+        {/* End Delivery Modal */}
+        <ConfirmDialog
+          open={showEndModal}
+          title="Complete Delivery"
+          description="Confirm the delivery completion."
+          confirmText="Complete"
+          cancelText="Cancel"
+          onConfirm={handleEndDelivery}
+          onCancel={() => setShowEndModal(false)}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Person in Charge (PIC) *</Label>
+              <Input value={endData.personnel} onChange={(e) => setEndData(prev => ({ ...prev, personnel: e.target.value }))} placeholder="Name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label>Date</Label>
+                <Input type="date" value={endData.date} onChange={(e) => setEndData(prev => ({ ...prev, date: e.target.value }))} />
               </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Personnel *</Label>
-                  <Input
-                    value={endData.personnel}
-                    onChange={(e) => setEndData(prev => ({ ...prev, personnel: e.target.value }))}
-                    placeholder="Confirm personnel name"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">End Location</Label>
-                  <div className="p-3 bg-muted rounded-lg">
-                    {endData.location ? (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-red-500" />
-                        <span className="text-sm">{formatLocationLabel(endData.location)}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        <span className="text-sm">Getting location...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-700 dark:text-amber-300 text-sm">
-                  Make sure you are back at the hub before ending the journey.
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowEndModal(false)} className="flex-1 bg-transparent">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleEndJourney}
-                    className="flex-1 gap-2 bg-red-600 text-white hover:bg-red-700"
-                    disabled={!endData.personnel}
-                  >
-                    <Square className="h-4 w-4" />
-                    End Journey
-                  </Button>
-                </div>
+              <div className="space-y-1">
+                <Label>Completion Time</Label>
+                <Input type="time" value={endData.time} onChange={(e) => setEndData(prev => ({ ...prev, time: e.target.value }))} />
               </div>
             </div>
           </div>
-        )}
+        </ConfirmDialog>
+
+        <ConfirmDialog
+          open={deleteOpen}
+          title="Delete this order?"
+          description={
+            selectedOrder
+              ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.`
+              : "Delete this order? This cannot be undone."
+          }
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteOpen(false)}
+        />
 
         {/* Flag Issue Modal */}
-        {showFlagModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowFlagModal(false)}>
-            <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-amber-500" />
-                  Flag Issue - {selectedOrder?.orderNumber}
-                </h3>
-                <button onClick={() => setShowFlagModal(false)} className="text-muted-foreground hover:text-foreground">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Flagged By (Personnel Name) *</Label>
-                  <Input
-                    value={flagData.personnel}
-                    onChange={(e) => setFlagData(prev => ({ ...prev, personnel: e.target.value }))}
-                    placeholder="Enter your name"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Issue Description *</Label>
-                  <Textarea
-                    value={flagData.issue}
-                    onChange={(e) => setFlagData(prev => ({ ...prev, issue: e.target.value }))}
-                    placeholder="Describe the issue in detail..."
-                    className="min-h-[100px]"
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Date</Label>
-                    <Input
-                      type="date"
-                      value={flagData.date}
-                      onChange={(e) => setFlagData(prev => ({ ...prev, date: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-sm font-medium">Time</Label>
-                    <Input
-                      type="time"
-                      value={flagData.time}
-                      onChange={(e) => setFlagData(prev => ({ ...prev, time: e.target.value }))}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setShowFlagModal(false)} className="flex-1 bg-transparent">
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleFlagIssue}
-                    className="flex-1 gap-2 bg-amber-500 text-white hover:bg-amber-600"
-                    disabled={!flagData.personnel || !flagData.issue}
-                  >
-                    <AlertTriangle className="h-4 w-4" />
-                    Flag Issue
-                  </Button>
-                </div>
-              </div>
+        <ConfirmDialog
+          open={showFlagModal}
+          title="Flag Issue"
+          description="Report an issue with this delivery."
+          confirmText="Flag"
+          cancelText="Cancel"
+          onConfirm={handleFlagIssue}
+          onCancel={() => setShowFlagModal(false)}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label>Personnel *</Label>
+              <Input value={flagData.personnel} onChange={(e) => setFlagData(prev => ({ ...prev, personnel: e.target.value }))} placeholder="Name" />
+            </div>
+            <div className="space-y-1">
+              <Label>Issue *</Label>
+              <Input value={flagData.issue} onChange={(e) => setFlagData(prev => ({ ...prev, issue: e.target.value }))} placeholder="What happened?" />
             </div>
           </div>
-        )}
+        </ConfirmDialog>
+
+        {/* Send Back Modal */}
+        <ConfirmDialog
+          open={showSendBackModal}
+          title="Send Back Order"
+          description="Choose where to send this order back to."
+          confirmText=""
+          cancelText="Cancel"
+          onConfirm={() => {}}
+          onCancel={() => setShowSendBackModal(false)}
+        >
+          <div className="space-y-2">
+            <Button variant="outline" className="w-full justify-start bg-transparent" onClick={() => sendBackTo("packing")}>
+              Send to Packing
+            </Button>
+            <Button variant="outline" className="w-full justify-start bg-transparent" onClick={() => sendBackTo("procurement")}>
+              Send to Procurement
+            </Button>
+            <Button variant="outline" className="w-full justify-start bg-transparent" onClick={() => sendBackTo("scheduling")}>
+              Send to Sales Confirmation
+            </Button>
+          </div>
+        </ConfirmDialog>
+
+        <AlertDialog {...alertState} onClose={closeAlert} />
       </Suspense>
-      <AlertDialog
-        open={alertState.open}
-        title={alertState.title}
-        description={alertState.description}
-        actionText={alertState.actionText}
-        onClose={closeAlert}
-      />
-      {showSendBackModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowSendBackModal(false)}>
-          <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <Undo2 className="h-5 w-5 text-orange-500" />
-                Send Back - {selectedOrder?.orderNumber}
-              </h3>
-              <button onClick={() => setShowSendBackModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">Choose where to send this order back to:</p>
-              <div className="grid gap-2 sm:grid-cols-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="gap-2 bg-transparent"
-                  onClick={() => sendBackTo("packing")}
-                  disabled={selectedOrder?.orderSource === "ad-hoc" && selectedOrder?.adHocOptions?.requiresPacking === false}
-                >
-                  <Undo2 className="h-4 w-4" />
-                  Back to Planning
-                </Button>
-                <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("procurement")}>
-                  <Undo2 className="h-4 w-4" />
-                  Back to Procurement
-                </Button>
-                <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("scheduling")}>
-                  <Undo2 className="h-4 w-4" />
-                  Back to Sales Confirmation
-                </Button>
-              </div>
-              <div className="pt-2">
-                <Button type="button" variant="ghost" className="w-full" onClick={() => setShowSendBackModal(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   )
 }

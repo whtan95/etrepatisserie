@@ -38,7 +38,7 @@ import {
 import type { SalesOrder, PackingItem, IssueData, MaterialPlanningLine } from "@/lib/types"
 import { getPhaseIndex } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { getNextStatus } from "@/lib/order-flow"
 
 const DEFAULT_MATERIAL_PLANNING_LINES: MaterialPlanningLine[] = [
@@ -76,6 +76,7 @@ export default function PackingPage() {
   const [showConfirmPacking, setShowConfirmPacking] = useState(false)
   const [showFlagModal, setShowFlagModal] = useState(false)
   const [showSendBackConfirm, setShowSendBackConfirm] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [flagData, setFlagData] = useState({
     personnel: "",
     issue: "",
@@ -274,6 +275,17 @@ export default function PackingPage() {
     setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
     showAlert("Order sent back to Planning!", { title: "Sent Back" })
     setShowSendBackConfirm(false)
+  }
+
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setShowDeleteConfirm(false)
+    setSelectedOrder(null)
+    setCheckedItems({})
+    setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
+    loadOrders()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
   }
 
   const confirmPacking = () => {
@@ -922,12 +934,26 @@ export default function PackingPage() {
                     </Button>
                     <Button
                       variant="outline"
+                      onClick={() => selectedOrder && router.push(`/portal/procurement?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                      className="gap-2 bg-transparent"
+                    >
+                      Return to Procurement
+                    </Button>
+                    <Button
+                      variant="outline"
                       onClick={openFlagModal}
                       disabled={selectedOrder?.hasIssue}
                       className={`gap-2 ${selectedOrder?.hasIssue ? "bg-red-500 text-white hover:bg-red-600 cursor-not-allowed" : "bg-transparent text-amber-600 border-amber-300 hover:bg-amber-50"}`}
                     >
                       <AlertCircle className="h-4 w-4" />
                       {selectedOrder?.hasIssue ? "Issue Flagged" : "Flag Issue"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="gap-2 bg-transparent text-destructive hover:bg-destructive/10"
+                    >
+                      Delete
                     </Button>
                   </div>
                     <div className="flex gap-2">
@@ -1065,6 +1091,15 @@ export default function PackingPage() {
         cancelText="Cancel"
         onConfirm={confirmSendBackToPlanning}
         onCancel={() => setShowSendBackConfirm(false)}
+      />
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        title="Delete this order?"
+        description={selectedOrder ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.` : "Delete this order? This cannot be undone."}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
       />
     </>
   )

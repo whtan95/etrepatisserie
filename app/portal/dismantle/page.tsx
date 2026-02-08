@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import {
@@ -37,14 +38,16 @@ import {
   Square,
   Navigation,
   Save,
+  ArrowLeft,
   ArrowUp,
   ArrowDown,
+  Trash2,
 } from "lucide-react"
 import type { SalesOrder, IssueData, DismantleData, DismantlePhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import Loading from "./loading"
-import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { getNextStatus, isPhaseRequired } from "@/lib/order-flow"
 import { useGPSTracking, generateStaticMapUrl, formatTrackingDuration, formatTrackingTime } from "@/hooks/use-gps-tracking"
 import { getLunchWindowFromLocalStorage, overlapsMinutesWindow, parseHHMMToMinutes } from "@/lib/time-window"
@@ -85,6 +88,7 @@ export default function DismantlePage() {
   const [showEndModal, setShowEndModal] = useState(false)
   const [showFlagModal, setShowFlagModal] = useState(false)
   const [showSendBackModal, setShowSendBackModal] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [showSetupLog, setShowSetupLog] = useState(false)
   const [setupLogMapFailed, setSetupLogMapFailed] = useState(false)
 
@@ -152,6 +156,15 @@ export default function DismantlePage() {
     dismantlingOrders.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     setOrders(dismantlingOrders)
     setIsLoading(false)
+  }
+
+  const confirmDelete = () => {
+    if (!selectedOrder) return
+    deleteOrderByNumber(selectedOrder.orderNumber)
+    setDeleteOpen(false)
+    setSelectedOrder(null)
+    loadOrders()
+    showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
   }
 
   const isLunchOverlapForOrder = (order: SalesOrder) => {
@@ -1269,6 +1282,22 @@ export default function DismantlePage() {
                 <div className="p-4 border-t border-border flex flex-wrap gap-2">
                   <Button
                     variant="outline"
+                    onClick={() => router.push(`/portal/setting-up?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                    className="gap-2 bg-transparent"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    Return
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setDeleteOpen(true)}
+                    className="gap-2 bg-transparent text-destructive border-destructive/40 hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Delete
+                  </Button>
+                  <Button
+                    variant="outline"
                     onClick={openSendBackModal}
                     className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
                   >
@@ -1296,6 +1325,20 @@ export default function DismantlePage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Delete this order?"
+        description={
+          selectedOrder
+            ? `Delete order ${selectedOrder.orderNumber}? This cannot be undone.`
+            : "Delete this order? This cannot be undone."
+        }
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteOpen(false)}
+      />
 
       {/* Start Journey Modal */}
       {showStartModal && (
