@@ -908,6 +908,7 @@ export default function DismantlePage() {
           orderNumber={selectedOrder?.orderNumber}
           hasIssue={selectedOrder?.hasIssue}
           orderSource={selectedOrder?.orderSource}
+          quotationPath="/portal/quotation/official-quotation"
           requiresDismantle={
             selectedOrder
               ? selectedOrder.orderSource === "ad-hoc"

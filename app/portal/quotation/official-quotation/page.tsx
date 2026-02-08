@@ -12,6 +12,7 @@ import {
 } from "@/lib/official-quotation-storage"
 import { ExternalLink, Search, Eye, Trash2 } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { OrderProgress } from "@/components/portal/order-progress"
 
 export default function OfficialQuotationListPage() {
   const [items, setItems] = useState<OfficialQuotation[]>([])
@@ -41,6 +42,7 @@ export default function OfficialQuotationListPage() {
 
   return (
     <div className="space-y-4">
+      <OrderProgress currentStep="quotation" quotationPath="/portal/quotation/official-quotation" />
       <ConfirmDialog
         open={deleteConfirmId !== null}
         title="Delete Quotation?"

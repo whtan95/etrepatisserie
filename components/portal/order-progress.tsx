@@ -9,11 +9,12 @@ import type { OrderStatus } from "@/lib/types"
 interface OrderProgressProps {
   currentPhase?: number
   currentStatus?: OrderStatus
-  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice"
+  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice" | "completed"
   orderNumber?: string
   clickable?: boolean
   hasIssue?: boolean
   orderSource?: "sales" | "ad-hoc"
+  quotationPath?: string
   requiresDismantle?: boolean
   adHocOptions?: {
     requiresPacking: boolean
@@ -32,6 +33,7 @@ export function OrderProgress({
   clickable = true,
   hasIssue = false,
   orderSource,
+  quotationPath,
   requiresDismantle,
   adHocOptions,
 }: OrderProgressProps) {
@@ -41,7 +43,7 @@ export function OrderProgress({
     {
       key: "quotation",
       label: "Quotation",
-      path: orderSource === "ad-hoc" ? "/portal/ad-hoc" : "/portal/sales-order",
+      path: quotationPath || (orderSource === "ad-hoc" ? "/portal/ad-hoc" : "/portal/sales-order"),
     },
     { key: "sales-confirmation", label: "Sales Confirmation", path: "/portal/sales-confirmation" },
     { key: "planning", label: "Planning", path: "/portal/planning" },
@@ -50,6 +52,7 @@ export function OrderProgress({
     { key: "delivery", label: "Delivery", path: "/portal/delivery" },
     { key: "returning", label: "Returning", path: "/portal/returning" },
     { key: "invoice", label: "Invoice", path: "/portal/invoice" },
+    { key: "completed", label: "Completed", path: "/portal/completed" },
   ] as const
 
   const resolvedRequiresDismantle = requiresDismantle ?? adHocOptions?.requiresDismantle ?? true
@@ -69,7 +72,7 @@ export function OrderProgress({
     if (status === "setting-up") return "delivery"
     if (status === "dismantling") return "returning"
     if (status === "invoice") return "invoice"
-    if (status === "completed") return "invoice"
+    if (status === "completed") return "completed"
     return undefined
   }
 

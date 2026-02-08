@@ -906,6 +906,7 @@ export default function SettingUpPage() {
             orderNumber={selectedOrder?.orderNumber}
             hasIssue={selectedOrder?.hasIssue}
             orderSource={selectedOrder?.orderSource}
+            quotationPath="/portal/quotation/official-quotation"
             requiresDismantle={
               selectedOrder
                 ? selectedOrder.orderSource === "ad-hoc"

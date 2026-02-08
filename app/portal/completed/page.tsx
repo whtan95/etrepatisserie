@@ -228,12 +228,12 @@ export default function CompletedPage() {
   return (
     <Suspense fallback={null}>
       <div className="space-y-6">
-        <OrderProgress currentStep="invoice" />
+        <OrderProgress currentStep="completed" quotationPath="/portal/quotation/official-quotation" />
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Invoice</h1>
-            <p className="text-sm text-muted-foreground">{filteredOrders.length} invoiceable orders</p>
+            <h1 className="text-2xl font-bold text-foreground">Completed</h1>
+            <p className="text-sm text-muted-foreground">{filteredOrders.length} completed orders</p>
           </div>
         </div>
 

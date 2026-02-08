@@ -12,6 +12,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Calendar, CheckCircle, Search } from "lucide-react"
 import type { SalesOrder } from "@/lib/types"
 import { getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
+import { OrderProgress } from "@/components/portal/order-progress"
 
 function generateSalesOrderNumber() {
   const prefix = "SO"
@@ -135,6 +136,7 @@ export default function SalesConfirmationPage() {
 
   return (
     <div className="p-6 space-y-6">
+      <OrderProgress currentStep="sales-confirmation" quotationPath="/portal/quotation/official-quotation" />
       <AlertDialog {...alertState} onClose={closeAlert} />
       <ConfirmDialog
         open={confirmOpen}

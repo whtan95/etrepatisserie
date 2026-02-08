@@ -48,6 +48,7 @@ import { SST_RATE, MALAYSIAN_STATES } from "@/lib/types"
 import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
 import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage } from "@/lib/inventory-storage"
+import { OrderProgress } from "@/components/portal/order-progress"
 
 interface QuotationCustomerData {
   customerName: string
@@ -711,6 +712,7 @@ export default function OfficialQuotationDetailPage() {
 
   return (
     <div className="space-y-4">
+      <OrderProgress currentStep="quotation" quotationPath="/portal/quotation/official-quotation" />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div className="flex items-center gap-2">

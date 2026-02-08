@@ -258,6 +258,7 @@ export default function ProcurementPage() {
                 currentStatus={selectedOrder.status}
                 orderNumber={selectedOrder.orderNumber}
                 orderSource={selectedOrder.orderSource}
+                quotationPath="/portal/quotation/official-quotation"
                 requiresDismantle={
                   selectedOrder.orderSource === "ad-hoc"
                     ? selectedOrder.adHocOptions?.requiresDismantle ?? true
