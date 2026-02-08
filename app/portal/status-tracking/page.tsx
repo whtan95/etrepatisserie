@@ -166,7 +166,7 @@ export default function StatusTrackingPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-9">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3 lg:grid-cols-9">
         {[
           { label: "Quotation", value: counts.quotation },
           { label: "Sales Conf.", value: counts.salesConf },
@@ -178,9 +178,9 @@ export default function StatusTrackingPage() {
           { label: "Invoice", value: counts.invoice },
           { label: "Issues", value: counts.issues },
         ].map((c) => (
-          <div key={c.label} className="rounded-lg border border-border bg-card px-4 py-3">
-            <div className="text-xs text-muted-foreground">{c.label}</div>
-            <div className="mt-1 text-lg font-semibold text-foreground">{c.value}</div>
+          <div key={c.label} className="rounded-lg border border-border bg-card px-2 py-1.5 sm:px-4 sm:py-3">
+            <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{c.label}</div>
+            <div className="text-base sm:text-lg font-semibold text-foreground">{c.value}</div>
           </div>
         ))}
       </div>
