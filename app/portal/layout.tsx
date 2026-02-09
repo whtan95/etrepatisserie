@@ -12,6 +12,7 @@ import {
   Wrench,
   Truck,
   CheckCircle,
+  DollarSign,
   BarChart3,
   ExternalLink,
   LogOut,
@@ -66,18 +67,23 @@ const sidebarItems: SidebarItem[] = [
   {
     title: "Quotation",
     icon: FileText,
-    children: [
-      {
-        title: "Webpage live",
-        href: "/portal/quotation/webpage-live",
-        icon: ExternalLink,
-      },
-      {
-        title: "Official quotation",
-        href: "/portal/quotation/official-quotation",
-        icon: FileText,
-      },
-    ],
+      children: [
+        {
+          title: "Webpage live",
+          href: "/portal/quotation/webpage-live",
+          icon: ExternalLink,
+        },
+        {
+          title: "Request for quotation",
+          href: "/portal/quotation/request-for-quotation",
+          icon: FileText,
+        },
+        {
+          title: "Official quotation",
+          href: "/portal/quotation/official-quotation",
+          icon: FileText,
+        },
+      ],
   },
   {
     title: "Sales Confirmation",
@@ -115,16 +121,16 @@ const sidebarItems: SidebarItem[] = [
       },
     ],
   },
-  {
-    title: "Invoice",
-    href: "/portal/invoice",
-    icon: FileText,
-  },
-  {
-    title: "Completed",
-    href: "/portal/completed",
-    icon: CheckCircle,
-  },
+    {
+      title: "Invoice",
+      href: "/portal/invoice",
+      icon: FileText,
+    },
+    {
+      title: "Payment",
+      href: "/portal/payment",
+      icon: DollarSign,
+    },
   {
     title: "Warning & Issues",
     href: "/portal/warnings",
@@ -242,6 +248,7 @@ export default function PortalLayout({
 
   const getPageTitle = () => {
     if (pathname.includes("/quotation/official-quotation")) return "Official quotation"
+    if (pathname.includes("/quotation/request-for-quotation")) return "Request for quotation"
     if (pathname.includes("/quotation/webpage-live")) return "Webpage live"
     if (pathname.includes("/sales-confirmation")) return "Sales Confirmation"
     if (pathname.includes("/planning")) return "Planning"
@@ -250,7 +257,8 @@ export default function PortalLayout({
     if (pathname.includes("/delivery") || pathname.includes("/setting-up")) return "Delivery"
     if (pathname.includes("/returning") || pathname.includes("/dismantle")) return "Returning"
     if (pathname.includes("/invoice")) return "Invoice"
-    if (pathname.includes("/completed")) return "Completed"
+    if (pathname.includes("/payment")) return "Payment"
+    if (pathname.includes("/completed")) return "Payment"
     if (pathname.includes("/status-tracking")) return "Progress Calendar"
     if (pathname.includes("/performance-tracking")) return "Performance Tracking"
     if (pathname.includes("/warnings")) return "Warning & Issues"

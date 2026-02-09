@@ -9,7 +9,7 @@ import type { OrderStatus } from "@/lib/types"
 interface OrderProgressProps {
   currentPhase?: number
   currentStatus?: OrderStatus
-  currentStep?: "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice" | "completed"
+  currentStep?: "request-for-quotation" | "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice" | "payment"
   orderNumber?: string
   clickable?: boolean
   hasIssue?: boolean
@@ -40,6 +40,7 @@ export function OrderProgress({
   const router = useRouter()
 
   const allPhases = [
+    { key: "request-for-quotation", label: "Request for quotation", path: "/portal/quotation/request-for-quotation" },
     {
       key: "quotation",
       label: "Quotation",
@@ -52,7 +53,7 @@ export function OrderProgress({
     { key: "delivery", label: "Delivery", path: "/portal/delivery" },
     { key: "returning", label: "Returning", path: "/portal/returning" },
     { key: "invoice", label: "Invoice", path: "/portal/invoice" },
-    { key: "completed", label: "Completed", path: "/portal/completed" },
+    { key: "payment", label: "Payment", path: "/portal/payment" },
   ] as const
 
   const resolvedRequiresDismantle = requiresDismantle ?? adHocOptions?.requiresDismantle ?? true
@@ -72,7 +73,9 @@ export function OrderProgress({
     if (status === "setting-up") return "delivery"
     if (status === "dismantling") return "returning"
     if (status === "invoice") return "invoice"
-    if (status === "completed") return "completed"
+    if (status === "payment") return "payment"
+    // Legacy: kept for backwards compatibility with older saved orders.
+    if (status === "completed") return "payment"
     return undefined
   }
 

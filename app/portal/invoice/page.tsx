@@ -123,13 +123,13 @@ export default function InvoicePage() {
     if (!selectedOrder) return
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      status: "completed",
+      status: "payment",
       updatedAt: new Date().toISOString(),
     }))
     setConfirmOpen(false)
-    showAlert("Invoice completed.", { title: "Completed", actionText: "OK" })
+    showAlert("Invoice completed. Sent to Payment.", { title: "Sent to Payment", actionText: "OK" })
     load()
-    router.push("/portal/completed")
+    router.push("/portal/payment")
   }
 
   const confirmSendBack = () => {
@@ -161,7 +161,7 @@ export default function InvoicePage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Mark invoice completed?"
-        description="This will move the order to Completed."
+        description="This will move the order to Payment."
         confirmText="Yes, complete"
         cancelText="Cancel"
         onConfirm={confirmComplete}
@@ -291,6 +291,30 @@ export default function InvoicePage() {
                   <div>Sales order: <span className="font-medium text-foreground">{selectedOrder.orderMeta?.salesOrderNumber || "-"}</span></div>
                   <div>Customer: <span className="font-medium text-foreground">{selectedOrder.customerData.customerName || "-"}</span></div>
                   <div>Total (RM): <span className="font-medium text-foreground">{Number.isFinite(selectedOrder.total) ? selectedOrder.total.toFixed(2) : "-"}</span></div>
+                  <div>
+                    Deposit (RM):{" "}
+                    <span className="font-medium text-foreground">
+                      {Number.isFinite(selectedOrder.paymentInfo?.depositAmount)
+                        ? selectedOrder.paymentInfo!.depositAmount.toFixed(2)
+                        : "0.00"}
+                    </span>{" "}
+                    <span className="text-xs text-muted-foreground">
+                      ({selectedOrder.paymentInfo?.depositReceivedAt ? "received" : "not received"})
+                    </span>
+                  </div>
+                  <div>
+                    Balance due (RM):{" "}
+                    <span className="font-medium text-foreground">
+                      {(() => {
+                        const total = Number.isFinite(selectedOrder.total) ? selectedOrder.total : 0
+                        const dep = selectedOrder.paymentInfo?.depositReceivedAt && Number.isFinite(selectedOrder.paymentInfo?.depositAmount)
+                          ? selectedOrder.paymentInfo!.depositAmount
+                          : 0
+                        const bal = Math.max(0, total - dep)
+                        return bal.toFixed(2)
+                      })()}
+                    </span>
+                  </div>
                 </div>
               </div>
 

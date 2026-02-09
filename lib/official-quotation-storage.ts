@@ -46,6 +46,7 @@ export interface OfficialQuotation {
   request: QuoteRequestData
   generatedData?: OfficialQuotationGeneratedData
   linkedOrderNumber?: string
+  linkedRequestForQuotationId?: string
 }
 
 const STORAGE_KEY = "etre_official_quotations_v1"

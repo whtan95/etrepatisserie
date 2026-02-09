@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { CalendarDays, LayoutGrid, List, Search } from "lucide-react"
 import type { OrderStatus, SalesOrder } from "@/lib/types"
 import { getAllOrders } from "@/lib/order-storage"
+import { getRequestForQuotations, type RequestForQuotation } from "@/lib/request-for-quotation-storage"
 import FullCalendar from "@fullcalendar/react"
 import dayGridPlugin from "@fullcalendar/daygrid"
 
@@ -21,10 +22,13 @@ const STATUS_LABEL: Record<OrderStatus, string> = {
   "setting-up": "Delivery",
   dismantling: "Returning",
   invoice: "Invoice",
+  payment: "Payment",
   "other-adhoc": "Other",
-  completed: "Completed",
+  completed: "Payment",
   cancelled: "Cancelled",
 }
+
+const RFQ_COLOR = "#A855F7" // purple
 
 const statusColor = (status: OrderStatus): string => {
   switch (status) {
@@ -35,6 +39,7 @@ const statusColor = (status: OrderStatus): string => {
     case "setting-up": return "#0EA5E9" // sky
     case "dismantling": return "#EF4444" // red
     case "invoice": return "#111827" // slate
+    case "payment": return "#16A34A"
     case "completed": return "#16A34A"
     default: return "#6B7280"
   }
@@ -59,12 +64,14 @@ function getStageHref(status: OrderStatus): string {
   if (status === "setting-up") return "/portal/delivery"
   if (status === "dismantling") return "/portal/returning"
   if (status === "invoice") return "/portal/invoice"
-  if (status === "completed") return "/portal/completed"
+  if (status === "payment") return "/portal/payment"
+  if (status === "completed") return "/portal/payment"
   return "/portal/status-tracking"
 }
 
 export default function StatusTrackingPage() {
   const [orders, setOrders] = useState<SalesOrder[]>([])
+  const [rfqs, setRfqs] = useState<RequestForQuotation[]>([])
   const [search, setSearch] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
@@ -74,6 +81,9 @@ export default function StatusTrackingPage() {
     const active = all.filter((o) => o.orderSource !== "ad-hoc" && o.status !== "cancelled")
     active.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     setOrders(active)
+    const allRfqs = getRequestForQuotations()
+    allRfqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    setRfqs(allRfqs)
   }, [])
 
   const filtered = useMemo(() => {
@@ -95,26 +105,63 @@ export default function StatusTrackingPage() {
     })
   }, [orders, search, dateFrom, dateTo])
 
+  const filteredRfqs = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return rfqs.filter((r) => {
+      const customerName = `${r.request.customer.companyName} ${r.request.customer.name}`.toLowerCase()
+      const matchesSearch =
+        !term ||
+        r.id.toLowerCase().includes(term) ||
+        customerName.includes(term) ||
+        (r.request.customer.email || "").toLowerCase().includes(term) ||
+        (r.request.event.eventName || "").toLowerCase().includes(term)
+
+      const d = r.request.event.eventDate
+      const matchesFrom = !dateFrom || (d && new Date(d) >= new Date(dateFrom))
+      const matchesTo = !dateTo || (d && new Date(d) <= new Date(dateTo))
+
+      return matchesSearch && matchesFrom && matchesTo
+    })
+  }, [rfqs, search, dateFrom, dateTo])
+
   const counts = useMemo(() => {
     const countBy = (status: OrderStatus) => filtered.filter((o) => o.status === status).length
-    return {
-      quotation: countBy("draft"),
-      salesConf: countBy("scheduling"),
-      planning: countBy("planning"),
-      procurement: countBy("procurement"),
-      packing: countBy("packing"),
-      deliveryS: countBy("setting-up"),
-      deliveryD: countBy("dismantling"),
-      invoice: countBy("invoice"),
-      issues: filtered.filter((o) => o.hasIssue && !o.issueData?.isResolved).length,
-    }
-  }, [filtered])
+      return {
+        rfq: filteredRfqs.length,
+        quotation: countBy("draft"),
+        salesConf: countBy("scheduling"),
+        planning: countBy("planning"),
+        procurement: countBy("procurement"),
+        packing: countBy("packing"),
+        deliveryS: countBy("setting-up"),
+        deliveryD: countBy("dismantling"),
+        invoice: countBy("invoice"),
+        payment: countBy("payment") + countBy("completed"),
+        issues: filtered.filter((o) => o.hasIssue && !o.issueData?.isResolved).length,
+      }
+    }, [filtered, filteredRfqs])
 
   const calendarEvents = useMemo(() => {
-    return filtered
+    const rfqEvents = filteredRfqs
+      .filter((r) => !!r.request.event.eventDate)
+      .map((r) => ({
+        id: `rfq:${r.id}`,
+        title: `RFQ - ${r.request.customer.companyName || r.request.customer.name || r.id}`,
+        start: r.request.event.eventDate,
+        allDay: true,
+        backgroundColor: RFQ_COLOR,
+        borderColor: RFQ_COLOR,
+        textColor: "#ffffff",
+        extendedProps: {
+          kind: "rfq",
+          requestId: r.id,
+        },
+      }))
+
+    const orderEvents = filtered
       .filter((o) => !!o.eventData.eventDate)
       .map((o) => ({
-        id: o.orderNumber,
+        id: `so:${o.orderNumber}`,
         title: `${STATUS_LABEL[o.status]} - ${getDisplayOrderNumber(o)}`,
         start: o.eventData.eventDate,
         allDay: true,
@@ -122,15 +169,19 @@ export default function StatusTrackingPage() {
         borderColor: statusColor(o.status),
         textColor: "#ffffff",
         extendedProps: {
+          kind: "order",
           orderNumber: o.orderNumber,
           status: o.status,
         },
       }))
-  }, [filtered])
+
+    return [...rfqEvents, ...orderEvents]
+  }, [filtered, filteredRfqs])
 
   const boardColumns = useMemo(
     () =>
       [
+        { status: "rfq", title: "Request for quotation" },
         { status: "draft", title: "Quotation" },
         { status: "scheduling", title: "Sales Confirmation" },
         { status: "planning", title: "Planning" },
@@ -139,45 +190,60 @@ export default function StatusTrackingPage() {
         { status: "setting-up", title: "Delivery" },
         { status: "dismantling", title: "Returning" },
         { status: "invoice", title: "Invoice" },
-        { status: "completed", title: "Completed" },
-      ] as Array<{ status: OrderStatus; title: string }>,
+        { status: "payment", title: "Payment" },
+      ] as Array<{ status: "rfq" | OrderStatus; title: string }>,
     [],
   )
 
   const boardByStatus = useMemo(() => {
-    const map = new Map<OrderStatus, SalesOrder[]>()
+    const map = new Map<"rfq" | OrderStatus, Array<SalesOrder | RequestForQuotation>>()
     for (const col of boardColumns) map.set(col.status, [])
+
+    for (const r of filteredRfqs) {
+      map.get("rfq")!.push(r)
+    }
+
     for (const o of filtered) {
-      if (!map.has(o.status)) continue
-      map.get(o.status)!.push(o)
+      const normalizedStatus = o.status === "completed" ? "payment" : o.status
+      if (!map.has(normalizedStatus)) continue
+      map.get(normalizedStatus)!.push(o)
     }
+
     for (const col of boardColumns) {
-      map.get(col.status)!.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+      const list = map.get(col.status)!
+      list.sort((a, b) => {
+        const aTime = "request" in a ? new Date(a.createdAt).getTime() : new Date(a.updatedAt).getTime()
+        const bTime = "request" in b ? new Date(b.createdAt).getTime() : new Date(b.updatedAt).getTime()
+        return bTime - aTime
+      })
     }
+
     return map
-  }, [filtered, boardColumns])
+  }, [filtered, filteredRfqs, boardColumns])
 
   return (
     <div className="p-6 space-y-6">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold text-foreground">Sales Orders</h1>
-        <p className="text-sm text-muted-foreground">
-          Quotation → Sales Confirmation → Planning → Procurement → Packing → Delivery → Returning (optional) → Invoice.
-        </p>
-      </div>
+          <h1 className="text-2xl font-semibold text-foreground">Sales Orders</h1>
+          <p className="text-sm text-muted-foreground">
+            Request for quotation → Quotation → Sales Confirmation → Planning → Procurement → Packing → Delivery → Returning (optional) → Invoice → Payment.
+          </p>
+        </div>
 
-      <div className="flex flex-wrap gap-1.5 sm:gap-2 lg:grid lg:grid-cols-9">
-        {[
-          { label: "Quote", value: counts.quotation },
-          { label: "Conf.", value: counts.salesConf },
-          { label: "Plan", value: counts.planning },
-          { label: "Proc.", value: counts.procurement },
-          { label: "Pack", value: counts.packing },
-          { label: "Deliv.", value: counts.deliveryS },
-          { label: "Return", value: counts.deliveryD },
-          { label: "Inv.", value: counts.invoice },
-          { label: "Issues", value: counts.issues },
-        ].map((c) => (
+        <div className="flex flex-wrap gap-1.5 sm:gap-2 lg:grid lg:grid-cols-11">
+          {[
+            { label: "RFQ", value: counts.rfq },
+            { label: "Quote", value: counts.quotation },
+            { label: "Conf.", value: counts.salesConf },
+            { label: "Plan", value: counts.planning },
+            { label: "Proc.", value: counts.procurement },
+            { label: "Pack", value: counts.packing },
+            { label: "Deliv.", value: counts.deliveryS },
+            { label: "Return", value: counts.deliveryD },
+            { label: "Inv.", value: counts.invoice },
+            { label: "Pay", value: counts.payment },
+            { label: "Issues", value: counts.issues },
+          ].map((c) => (
           <div key={c.label} className="rounded border border-border bg-card px-1.5 py-1 sm:px-3 sm:py-2 text-center min-w-[52px]">
             <div className="text-[9px] sm:text-xs text-muted-foreground">{c.label}</div>
             <div className="text-sm sm:text-lg font-semibold text-foreground">{c.value}</div>
@@ -238,7 +304,7 @@ export default function StatusTrackingPage() {
           </div>
 
           <div className="mt-4 overflow-x-auto">
-            <div className="grid min-w-[1200px] grid-cols-9 gap-3">
+            <div className="grid min-w-[1400px] grid-cols-10 gap-3">
               {boardColumns.map((col) => {
                 const list = boardByStatus.get(col.status) || []
                 return (
@@ -253,31 +319,64 @@ export default function StatusTrackingPage() {
                           Empty
                         </div>
                       ) : (
-                        list.map((o) => (
-                          <Link
-                            key={o.orderNumber}
-                            href={`${getStageHref(o.status)}?order=${encodeURIComponent(o.orderNumber)}`}
-                            className="block rounded-md border border-border bg-background p-2 hover:bg-secondary/30"
-                            title="Open"
-                          >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="truncate font-mono text-xs text-foreground">{getDisplayOrderNumber(o)}</div>
-                                <div className="truncate text-xs text-muted-foreground">{o.customerData.customerName || "-"}</div>
-                                <div className="truncate text-xs text-muted-foreground">{o.eventData.eventName || "-"}</div>
-                              </div>
-                              <span
-                                className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
-                                style={{ backgroundColor: statusColor(o.status) }}
+                        list.map((entry) => {
+                          if ("request" in entry) {
+                            const r = entry as RequestForQuotation
+                            const companyOrName = r.request.customer.companyName || r.request.customer.name || "-"
+                            return (
+                              <Link
+                                key={r.id}
+                                href={`/portal/quotation/request-for-quotation/${encodeURIComponent(r.id)}`}
+                                className="block rounded-md border border-border bg-background p-2 hover:bg-secondary/30"
+                                title="Open"
                               >
-                                {STATUS_LABEL[o.status]}
-                              </span>
-                            </div>
-                            <div className="mt-1 text-[10px] text-muted-foreground">
-                              Event: {formatDate(o.eventData.eventDate)}
-                            </div>
-                          </Link>
-                        ))
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="truncate font-mono text-xs text-foreground">{r.id}</div>
+                                    <div className="truncate text-xs text-muted-foreground">{companyOrName}</div>
+                                    <div className="truncate text-xs text-muted-foreground">{r.request.event.eventName || "-"}</div>
+                                  </div>
+                                  <span
+                                    className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
+                                    style={{ backgroundColor: RFQ_COLOR }}
+                                  >
+                                    RFQ
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-[10px] text-muted-foreground">
+                                  Event: {formatDate(r.request.event.eventDate)}
+                                </div>
+                              </Link>
+                            )
+                          }
+
+                          const o = entry as SalesOrder
+                          return (
+                            <Link
+                              key={o.orderNumber}
+                              href={`${getStageHref(o.status)}?order=${encodeURIComponent(o.orderNumber)}`}
+                              className="block rounded-md border border-border bg-background p-2 hover:bg-secondary/30"
+                              title="Open"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="truncate font-mono text-xs text-foreground">{getDisplayOrderNumber(o)}</div>
+                                  <div className="truncate text-xs text-muted-foreground">{o.customerData.customerName || "-"}</div>
+                                  <div className="truncate text-xs text-muted-foreground">{o.eventData.eventName || "-"}</div>
+                                </div>
+                                <span
+                                  className="shrink-0 rounded-md px-2 py-1 text-[10px] font-semibold text-white"
+                                  style={{ backgroundColor: statusColor(o.status) }}
+                                >
+                                  {STATUS_LABEL[o.status]}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-[10px] text-muted-foreground">
+                                Event: {formatDate(o.eventData.eventDate)}
+                              </div>
+                            </Link>
+                          )
+                        })
                       )}
                     </div>
                   </div>
@@ -295,8 +394,13 @@ export default function StatusTrackingPage() {
               height="auto"
               events={calendarEvents as any}
               eventClick={(info) => {
-                const orderNumber = (info.event.extendedProps as any)?.orderNumber as string | undefined
-                const status = (info.event.extendedProps as any)?.status as OrderStatus | undefined
+                const props = info.event.extendedProps as any
+                if (props?.kind === "rfq" && props?.requestId) {
+                  window.location.href = `/portal/quotation/request-for-quotation/${encodeURIComponent(props.requestId)}`
+                  return
+                }
+                const orderNumber = props?.orderNumber as string | undefined
+                const status = props?.status as OrderStatus | undefined
                 if (!orderNumber) return
                 const base = getStageHref(status || "draft")
                 window.location.href = `${base}?order=${encodeURIComponent(orderNumber)}`
@@ -321,6 +425,32 @@ export default function StatusTrackingPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
+                  {filteredRfqs.map((r) => (
+                    <tr key={r.id} className="hover:bg-secondary/30">
+                      <td className="px-4 py-3">
+                        <span
+                          className="inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold text-white"
+                          style={{ backgroundColor: RFQ_COLOR }}
+                        >
+                          RFQ
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{r.id}</td>
+                      <td className="px-4 py-3 font-mono text-xs">-</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {r.request.customer.companyName || r.request.customer.name || "-"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{r.request.event.eventName || "-"}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{formatDate(r.request.event.eventDate)}</td>
+                      <td className="px-4 py-3">
+                        <Button asChild variant="outline" className="bg-transparent">
+                          <Link href={`/portal/quotation/request-for-quotation/${encodeURIComponent(r.id)}`}>
+                            Open
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
                   {filtered.map((o) => (
                     <tr key={o.orderNumber} className="hover:bg-secondary/30">
                       <td className="px-4 py-3">

@@ -28,7 +28,7 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
       case "dismantling":
         return "invoice"
       case "invoice":
-        return "completed"
+        return "payment"
       default:
         return current
     }
@@ -41,7 +41,7 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
     if (requiresSetup) return "setting-up"
     if (requiresDismantle) return "dismantling"
     if (requiresOtherAdhoc) return "other-adhoc"
-    return "completed"
+    return "payment"
   }
 
   if (current === "packing") {
@@ -64,7 +64,8 @@ export const getNextStatus = (order: SalesOrder, current: OrderStatus): OrderSta
 
   if (current === "other-adhoc") return "invoice"
 
-  if (current === "invoice") return "completed"
+  if (current === "invoice") return "payment"
+  if (current === "payment") return "payment"
 
   return current
 }
@@ -97,6 +98,9 @@ export const getPreviousStatus = (order: SalesOrder, current: OrderStatus): Orde
         return "setting-up"
       case "invoice":
         return requiresDismantle ? "dismantling" : "setting-up"
+      case "payment":
+        return "invoice"
+      // Legacy: kept for backwards compatibility with older saved orders.
       case "completed":
         return "invoice"
       case "other-adhoc":
@@ -130,6 +134,8 @@ export const getPreviousStatus = (order: SalesOrder, current: OrderStatus): Orde
     if (requiresSetup) return "setting-up"
     return "procurement"
   }
+
+  if (current === "payment") return "invoice"
 
   return current
 }

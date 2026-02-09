@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -38,6 +39,8 @@ export default function SalesConfirmationPage() {
   const [search, setSearch] = useState("")
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [salesOrderNumber, setSalesOrderNumber] = useState("")
+  const [depositAmount, setDepositAmount] = useState("")
+  const [depositReceived, setDepositReceived] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [ccRows, setCcRows] = useState<Array<{ department: string; name: string; email: string }>>([
@@ -69,10 +72,20 @@ export default function SalesConfirmationPage() {
   useEffect(() => {
     if (!selectedOrder) {
       setSalesOrderNumber("")
+      setDepositAmount("")
+      setDepositReceived(false)
       return
     }
     setSalesOrderNumber(selectedOrder.orderMeta?.salesOrderNumber || generateSalesOrderNumber())
   }, [selectedOrder])
+
+  useEffect(() => {
+    if (!selectedOrder) return
+    const pi = selectedOrder.paymentInfo
+    const dep = typeof pi?.depositAmount === "number" && Number.isFinite(pi.depositAmount) ? pi.depositAmount : 0
+    setDepositAmount(dep > 0 ? dep.toFixed(2) : "")
+    setDepositReceived(Boolean(pi?.depositReceivedAt))
+  }, [selectedOrderNumber])
 
   useEffect(() => {
     if (!selectedOrder) return
@@ -118,6 +131,20 @@ export default function SalesConfirmationPage() {
       }))
       .filter((r) => r.department || r.name || r.email)
 
+    const depositRaw = Number.parseFloat(depositAmount || "")
+    const depositValue = Number.isFinite(depositRaw) ? Math.max(0, depositRaw) : 0
+    const existingPaymentInfo = selectedOrder.paymentInfo
+    const nextPaymentInfo =
+      depositValue > 0
+        ? {
+            ...(existingPaymentInfo ?? { depositAmount: depositValue }),
+            depositAmount: depositValue,
+            depositReceivedAt: depositReceived ? (existingPaymentInfo?.depositReceivedAt ?? new Date().toISOString()) : undefined,
+          }
+        : existingPaymentInfo?.finalPaymentReceivedAt
+          ? { ...existingPaymentInfo, depositAmount: 0, depositReceivedAt: undefined }
+          : undefined
+
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
       status: "planning",
@@ -126,6 +153,7 @@ export default function SalesConfirmationPage() {
         salesOrderNumber: salesOrderNumber.trim(),
         salesConfirmationCc: ccClean.length ? ccClean : undefined,
       },
+      paymentInfo: nextPaymentInfo,
       updatedAt: new Date().toISOString(),
     }))
 
@@ -334,6 +362,37 @@ export default function SalesConfirmationPage() {
                 <div className="grid gap-2 md:grid-cols-[200px_1fr] md:items-center">
                   <Label>Sales Order Number</Label>
                   <Input value={salesOrderNumber} onChange={(e) => setSalesOrderNumber(e.target.value)} placeholder="e.g. SO2602-ABCD" />
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <Label>Deposit (RM)</Label>
+                    <Input
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      placeholder="Leave blank if no deposit"
+                    />
+                  </div>
+                  <div className="flex items-end justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-foreground">Deposit received</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {selectedOrder.paymentInfo?.depositReceivedAt ? new Date(selectedOrder.paymentInfo.depositReceivedAt).toLocaleString() : "Not received"}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={depositReceived}
+                      onCheckedChange={(v) => {
+                        const dep = Number.parseFloat(depositAmount || "")
+                        const depOk = Number.isFinite(dep) && dep > 0
+                        setDepositReceived(depOk ? v : false)
+                      }}
+                    />
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2 justify-end">
                   <Button

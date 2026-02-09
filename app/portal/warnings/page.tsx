@@ -180,19 +180,20 @@ export default function WarningsPage() {
   }
 
   const getStageLabel = (status: string) => {
-    const stages: Record<string, string> = {
-      "draft": "Quotation",
-      "scheduling": "Sales Confirmation",
-      "planning": "Planning",
-      "procurement": "Procurement",
-      "packing": "Packing",
-      "setting-up": "Delivery",
-      "dismantling": "Returning",
-      "invoice": "Invoice",
-      "completed": "Completed",
+      const stages: Record<string, string> = {
+        "draft": "Quotation",
+        "scheduling": "Sales Confirmation",
+        "planning": "Planning",
+        "procurement": "Procurement",
+        "packing": "Packing",
+        "setting-up": "Delivery",
+        "dismantling": "Returning",
+        "invoice": "Invoice",
+        "payment": "Payment",
+        "completed": "Payment",
+      }
+      return stages[status] || status
     }
-    return stages[status] || status
-  }
 
   if (isLoading) {
     return (

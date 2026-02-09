@@ -17,7 +17,7 @@ import type {
   CustomerData,
   QuoteRequestData,
 } from "@/lib/quote-webpage/quote-types"
-import { addOfficialQuotation, createOfficialQuotationFromWebRequest } from "@/lib/official-quotation-storage"
+import { addRequestForQuotation, createRequestForQuotationFromWebRequest } from "@/lib/request-for-quotation-storage"
 import { MENU_CATALOG } from "@/lib/quote-webpage/menu-catalog"
 
 const STORAGE_KEY = "etre_quoteRequest_v2"
@@ -259,12 +259,12 @@ export default function QuoteRequestClient() {
   const footerYear = useMemo(() => new Date().getFullYear(), [])
 
   const submit = () => {
-    const official = createOfficialQuotationFromWebRequest({ request })
-    addOfficialQuotation(official)
+    const rfq = createRequestForQuotationFromWebRequest({ request })
+    addRequestForQuotation(rfq)
 
     setIsSubmitted(true)
     localStorage.setItem(`${STORAGE_KEY}_submittedAt`, new Date().toISOString())
-    localStorage.setItem(`${STORAGE_KEY}_lastOfficialQuotationId`, official.id)
+    localStorage.setItem(`${STORAGE_KEY}_lastRequestForQuotationId`, rfq.id)
   }
 
   return (

@@ -299,17 +299,18 @@ export interface OtherAdhocData {
 }
 
 export type OrderStatus = 
-  | "draft" 
-  | "scheduling" 
-  | "planning"
-  | "packing" 
-  | "procurement"
-  | "setting-up" 
-  | "dismantling" 
-  | "invoice"
-  | "other-adhoc"
-  | "completed" 
-  | "cancelled"
+    | "draft" 
+    | "scheduling" 
+    | "planning"
+    | "packing" 
+    | "procurement"
+    | "setting-up" 
+    | "dismantling" 
+    | "invoice"
+    | "payment"
+    | "other-adhoc"
+    | "completed" 
+    | "cancelled"
 
 export interface MaterialPlanningLine {
   category: string
@@ -372,6 +373,13 @@ export interface IssueData {
   resolvedBy?: string
 }
 
+export interface PaymentInfo {
+  depositAmount: number
+  depositReceivedAt?: string
+  finalPaymentReceivedAt?: string
+  notes?: string
+}
+
 export interface SalesOrder {
   id: string
   orderNumber: string
@@ -405,6 +413,7 @@ export interface SalesOrder {
   packingData?: PackingData
   materialPlanning?: MaterialPlanningData
   quotationOptions?: QuotationOptions
+  paymentInfo?: PaymentInfo
   setupData?: SetupData
   dismantleData?: DismantleData
   otherAdhocData?: OtherAdhocData
@@ -517,8 +526,10 @@ export function getPhaseIndex(status: OrderStatus): number {
     case "setting-up": return 5
     case "dismantling": return 6
     case "invoice": return 7
-    case "other-adhoc": return 8
-    case "completed": return 9
+    case "payment": return 8
+    // Legacy: kept for backwards compatibility with older saved orders.
+    case "completed": return 8
+    case "other-adhoc": return 9
     case "cancelled": return -1
     default: return 0
   }
@@ -536,8 +547,9 @@ export function getPhaseFromPath(pathname: string): number {
   if (pathname.includes("/returning")) return 6
   if (pathname.includes("dismantle")) return 6
   if (pathname.includes("/invoice")) return 7
-  if (pathname.includes("other-adhoc")) return 8
-  if (pathname.includes("completed")) return 9
+  if (pathname.includes("/payment")) return 8
+  if (pathname.includes("/completed")) return 8
+  if (pathname.includes("other-adhoc")) return 9
   return 0
 }
 

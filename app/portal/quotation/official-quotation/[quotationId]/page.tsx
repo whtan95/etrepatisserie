@@ -41,6 +41,7 @@ import {
   Download,
   Printer,
   Pencil,
+  Image as ImageIcon,
 } from "lucide-react"
 import { MENU_CATALOG } from "@/lib/quote-webpage/menu-catalog"
 import type { OrderItem, PricingData, SalesOrder } from "@/lib/types"
@@ -710,10 +711,15 @@ export default function OfficialQuotationDetailPage() {
 
   const { event, customer, branding, menu } = item.request
   const yesNo = (v: boolean) => (v ? "Yes" : "No")
-
-  return (
-    <div className="space-y-4">
-      <OrderProgress currentStep="quotation" quotationPath="/portal/quotation/official-quotation" />
+  const categories = (menu.categories || []).join(", ") || "-"
+  const drinks = (menu.drinks || []).join(", ") || "-"
+  const itemLines = Object.entries(menu.itemQuantities || {})
+    .filter(([, qty]) => typeof qty === "number" && qty > 0)
+    .sort(([a], [b]) => a.localeCompare(b))
+  
+    return (
+      <div className="space-y-4">
+        <OrderProgress currentStep="quotation" quotationPath="/portal/quotation/official-quotation" />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div className="flex items-center gap-2">
@@ -728,12 +734,107 @@ export default function OfficialQuotationDetailPage() {
         <div />
       </div>
 
-      <fieldset disabled={isLocked} className={isLocked ? "opacity-95" : ""}>
-      {/* Quotation Order Information (Editable) */}
-      <div className="rounded-lg border-2 border-accent/50 bg-card overflow-hidden">
-        <div className="border-b border-accent/30 bg-accent/10 px-6 py-4">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
-            <FileText className="h-5 w-5" />
+        <fieldset disabled={isLocked} className={isLocked ? "opacity-95" : ""}>
+        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold text-foreground">Request script (from Webpage live)</h2>
+              <p className="text-xs text-muted-foreground">
+                Read-only snapshot of the customer&apos;s submitted request.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+              <div className="text-xs font-semibold text-foreground">Event</div>
+              <div className="grid gap-2 text-sm text-muted-foreground">
+                <div><span className="text-foreground font-medium">Event name:</span> {event.eventName || "-"}</div>
+                <div><span className="text-foreground font-medium">Event date:</span> {event.eventDate || "-"}</div>
+                <div><span className="text-foreground font-medium">Event type:</span> {event.eventType || "-"}</div>
+                <div><span className="text-foreground font-medium">Estimated guests:</span> {event.estimatedGuests || "-"}</div>
+                <div><span className="text-foreground font-medium">Location:</span> {event.eventLocation || "-"}</div>
+                {event.otherAreaName && <div><span className="text-foreground font-medium">Other area:</span> {event.otherAreaName}</div>}
+                {event.otherVenueType && <div><span className="text-foreground font-medium">Venue type:</span> {event.otherVenueType}</div>}
+                <div><span className="text-foreground font-medium">Returning required:</span> {yesNo(!!event.returningRequired)}</div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+              <div className="text-xs font-semibold text-foreground">Customer</div>
+              <div className="grid gap-2 text-sm text-muted-foreground">
+                <div><span className="text-foreground font-medium">Company:</span> {customer.companyName || "-"}</div>
+                <div><span className="text-foreground font-medium">Name:</span> {customer.name || "-"}</div>
+                <div><span className="text-foreground font-medium">Phone:</span> {customer.phone || "-"}</div>
+                <div><span className="text-foreground font-medium">Email:</span> {customer.email || "-"}</div>
+                <div><span className="text-foreground font-medium">Address:</span> {customer.address || "-"}</div>
+                <div><span className="text-foreground font-medium">Notes:</span> {customer.notes || "-"}</div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+              <div className="text-xs font-semibold text-foreground">Branding</div>
+              <div className="grid gap-2 text-sm text-muted-foreground">
+                <div><span className="text-foreground font-medium">Include brand logo:</span> {yesNo(!!branding.includeBrandLogo)}</div>
+                <div><span className="text-foreground font-medium">Match brand colours:</span> {yesNo(!!branding.matchBrandColours)}</div>
+                <div><span className="text-foreground font-medium">Logo on dessert:</span> {yesNo(!!branding.logoOnDessert)}</div>
+                <div><span className="text-foreground font-medium">Logo on packaging:</span> {yesNo(!!branding.logoOnPackaging)}</div>
+                <div><span className="text-foreground font-medium">Logo on others:</span> {yesNo(!!branding.logoOnOthers)}{branding.logoOnOthersText ? ` (${branding.logoOnOthersText})` : ""}</div>
+                <div><span className="text-foreground font-medium">Colour on dessert:</span> {yesNo(!!branding.colourOnDessert)}</div>
+                <div><span className="text-foreground font-medium">Colour on packaging:</span> {yesNo(!!branding.colourOnPackaging)}</div>
+                <div><span className="text-foreground font-medium">Colour on others:</span> {yesNo(!!branding.colourOnOthers)}{branding.colourOnOthersText ? ` (${branding.colourOnOthersText})` : ""}</div>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+              <div className="text-xs font-semibold text-foreground">Menu</div>
+              <div className="grid gap-2 text-sm text-muted-foreground">
+                <div><span className="text-foreground font-medium">Customisation level:</span> {menu.customisationLevel || "-"}</div>
+                <div><span className="text-foreground font-medium">Customisation notes:</span> {menu.customisationNotes || "-"}</div>
+                <div><span className="text-foreground font-medium">Dessert size:</span> {menu.dessertSize || "-"}</div>
+                <div><span className="text-foreground font-medium">Packaging:</span> {menu.packaging || "-"}</div>
+                <div><span className="text-foreground font-medium">Categories:</span> {categories}</div>
+                <div><span className="text-foreground font-medium">Drinks:</span> {drinks}{menu.drinksOtherText ? ` (${menu.drinksOtherText})` : ""}</div>
+              </div>
+
+              {itemLines.length ? (
+                <div className="rounded-md border border-border bg-muted/30 p-3">
+                  <div className="text-xs font-semibold text-foreground mb-2">Requested items</div>
+                  <div className="grid gap-1 text-xs text-muted-foreground">
+                    {itemLines.map(([id, qty]) => (
+                      <div key={id} className="flex items-center justify-between gap-3">
+                        <span className="font-mono">{id}</span>
+                        <span className="text-foreground font-medium">{qty}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground">No item quantities selected.</div>
+              )}
+
+              {menu.referenceImageDataUrl ? (
+                <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                    <ImageIcon className="h-4 w-4" />
+                    Reference image
+                  </div>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    alt={menu.referenceImageName || "Reference image"}
+                    src={menu.referenceImageDataUrl}
+                    className="max-h-[260px] w-auto rounded-md border border-border bg-background"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+        {/* Quotation Order Information (Editable) */}
+        <div className="rounded-lg border-2 border-accent/50 bg-card overflow-hidden">
+          <div className="border-b border-accent/30 bg-accent/10 px-6 py-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <FileText className="h-5 w-5" />
             Quotation Order Information
           </h2>
         </div>
@@ -856,95 +957,6 @@ export default function OfficialQuotationDetailPage() {
               <dd className="font-medium">{event.eventLocation || "-"}</dd>
             </div>
           </dl>
-        </div>
-      </div>
-
-      {/* Transport Information (Plain display from web form) */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="border-b border-border bg-secondary/30 px-6 py-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            Transport Information
-            <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage form)</span>
-          </h2>
-        </div>
-        <div className="p-4">
-          <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2 lg:grid-cols-4">
-            <div className="flex gap-2 md:col-span-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Delivery address (web):</dt>
-              <dd className="font-medium">{customer.address || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Contact:</dt>
-              <dd className="font-medium">{customer.name || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Phone:</dt>
-              <dd className="font-medium">{customer.phone || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Delivery date:</dt>
-              <dd className="font-medium">{event.takeOutSetupDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Event date:</dt>
-              <dd className="font-medium">{event.eventDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Returning required:</dt>
-              <dd className="font-medium">{event.returningRequired ? "Yes" : "No"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Returning date:</dt>
-              <dd className="font-medium">{event.takeOutDismantleDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2 md:col-span-2 lg:col-span-4">
-              <dt className="text-muted-foreground whitespace-nowrap">Location:</dt>
-              <dd className="font-medium">{event.eventLocation || "-"}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      {/* Branding & Menu Preferences (Plain display from web form) */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="border-b border-border bg-secondary/30 px-6 py-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Branding Requirements
-              <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage)</span>
-            </h2>
-          </div>
-          <div className="p-4 text-sm space-y-1.5">
-            <div className="flex justify-between"><span className="text-muted-foreground">Include brand logo:</span><span className="font-medium">{yesNo(branding.includeBrandLogo)}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Match brand colours:</span><span className="font-medium">{yesNo(branding.matchBrandColours)}</span></div>
-            {branding.includeBrandLogo && (
-              <div className="pl-4 text-xs space-y-1 border-l-2 border-border mt-2">
-                <div className="flex justify-between"><span className="text-muted-foreground">Logo on dessert:</span><span>{yesNo(branding.logoOnDessert)}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Logo on packaging:</span><span>{yesNo(branding.logoOnPackaging)}</span></div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="border-b border-border bg-secondary/30 px-6 py-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              Menu Preferences
-              <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage)</span>
-            </h2>
-          </div>
-          <div className="p-4 text-sm space-y-1.5">
-            <div className="flex justify-between"><span className="text-muted-foreground">Customisation:</span><span className="font-medium">{menu.customisationLevel || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Dessert size:</span><span className="font-medium">{menu.dessertSize || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Packaging:</span><span className="font-medium">{menu.packaging || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Drinks:</span><span className="font-medium">{menu.drinks?.join(", ") || "-"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">Categories:</span><span className="font-medium">{menu.categories?.join(", ") || "-"}</span></div>
-            {menu.customisationNotes && (
-              <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
-                <span className="text-muted-foreground">Notes:</span> {menu.customisationNotes}
-              </div>
-            )}
-          </div>
         </div>
       </div>
 

@@ -1502,12 +1502,12 @@ export default function SchedulingDetailPage({
       router.push(`/portal/setting-up`)
     } else if (nextStatus === "dismantling") {
       router.push(`/portal/dismantle`)
-    } else if (nextStatus === "other-adhoc") {
-      router.push(`/portal/other-adhoc`)
-    } else {
-      router.push(`/portal/completed`)
+      } else if (nextStatus === "other-adhoc") {
+        router.push(`/portal/other-adhoc`)
+      } else {
+        router.push(`/portal/payment`)
+      }
     }
-  }
 
   const generatePackingItems = (order: SalesOrder) => {
     if (order.orderSource === "ad-hoc" && order.items?.length) {

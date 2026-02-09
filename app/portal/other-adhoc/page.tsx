@@ -155,7 +155,7 @@ export default function OtherAdhocPage() {
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
-      status: "completed" as const,
+      status: "invoice" as const,
       otherAdhocData: {
         personnel: info.personnel,
         date: info.date,
@@ -173,10 +173,10 @@ export default function OtherAdhocPage() {
       date: new Date().toISOString().split("T")[0],
       time: new Date().toTimeString().slice(0, 5),
     })
-    showAlert("Other Adhoc completed! Order marked as Completed.", {
-      title: `Completed ${completedOrderNumber}`,
-      actionText: "Go to Completed",
-      onClose: () => router.push("/portal/completed"),
+    showAlert("Other Adhoc completed! Sent to Invoice.", {
+      title: `Sent to Invoice ${completedOrderNumber}`,
+      actionText: "Go to Invoice",
+      onClose: () => router.push("/portal/invoice"),
     })
   }
 
@@ -449,11 +449,11 @@ export default function OtherAdhocPage() {
                   className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                   onClick={handleDone}
                   disabled={!info.personnel || !personnelAgreed}
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Mark Completed
-                </Button>
-              </div>
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Complete & Send to Invoice
+                  </Button>
+                </div>
             </div>
           )}
         </div>
