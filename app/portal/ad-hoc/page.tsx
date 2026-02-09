@@ -2716,7 +2716,7 @@ function AdHocOrderContent() {
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-yellow-600" />
-                  <span className="text-foreground">Sales Confirmation</span>
+                  <span className="text-foreground">Sales order</span>
                   <span className="text-green-600 ml-auto">Required</span>
                 </div>
                 <div className="flex items-center gap-2">

@@ -432,7 +432,7 @@ export function QuotationPreview({ salesOrder, isEditMode = false, showSave = tr
             disabled={!isSaved}
             className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
           >
-            Proceed to Sales Confirmation
+            Proceed to Sales order
           </Button>
         </div>
       )}

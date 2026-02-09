@@ -14,7 +14,7 @@ async function readJsonFile(): Promise<InventoryDb | null> {
     const raw = await fs.readFile(DB_PATH, "utf8")
     const parsed = JSON.parse(raw)
     const version = typeof parsed?.version === "number" ? parsed.version : 1
-    if (version !== 3) return null
+    if (version !== 4 && version !== 3) return null
     return normalizeInventoryDb(parsed)
   } catch {
     return null
@@ -30,18 +30,18 @@ async function writeJsonFile(db: InventoryDb) {
 
 export async function getInventoryDb(): Promise<InventoryDb> {
   const existing = await readJsonFile()
-  if (existing && existing.version === 3) return existing
+  if (existing && existing.version === 4) return existing
 
   const fresh: InventoryDb = existing && existing.items?.length
-    ? { ...existing, version: 3, updatedAt: new Date().toISOString() }
-    : { version: 3, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
+    ? { ...existing, version: 4, updatedAt: new Date().toISOString() }
+    : { version: 4, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
   await writeJsonFile(fresh)
   return fresh
 }
 
 export async function updateInventoryDb(items: InventoryItem[]): Promise<InventoryDb> {
   const merged = normalizeInventoryDb({
-    version: 3,
+    version: 4,
     items,
     updatedAt: new Date().toISOString(),
   })

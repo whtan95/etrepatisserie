@@ -15,10 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar, CheckCircle, ClipboardList, Search, Save, Undo2, AlertCircle } from "lucide-react"
+import { Calendar, CheckCircle, ClipboardList, Search, Save, Undo2, AlertCircle, Trash2 } from "lucide-react"
 import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
+import type { InventoryItem } from "@/lib/inventory"
+import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage } from "@/lib/inventory-storage"
 
 const PLANNING_CATEGORIES = [
   "Kitchen item (raw ingredients)",
@@ -56,7 +59,10 @@ export default function PlanningPage() {
   const [orders, setOrders] = useState<SalesOrder[]>([])
   const [search, setSearch] = useState("")
   const [selectedOrderNumber, setSelectedOrderNumber] = useState("")
-  const [planningPic, setPlanningPic] = useState("")
+  const [approvedBy, setApprovedBy] = useState("")
+  const [approvedDate, setApprovedDate] = useState("")
+  const [approvedTime, setApprovedTime] = useState("")
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(DEFAULT_INVENTORY_ITEMS)
   const [lines, setLines] = useState<MaterialPlanningLine[]>([createEmptyLine()])
   const [isLocked, setIsLocked] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -75,6 +81,28 @@ export default function PlanningPage() {
   useEffect(() => {
     load()
   }, [])
+
+  useEffect(() => {
+    if (!hasInventoryDbInLocalStorage()) return
+    const db = getInventoryDbFromLocalStorage()
+    if (db?.items?.length) setInventoryItems(db.items)
+  }, [])
+
+  const inventoryNamesByCategory = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const it of inventoryItems) {
+      const category = (it.category || "").trim()
+      const name = (it.name || "").trim()
+      if (!category || !name) continue
+      const list = map.get(category) ?? []
+      list.push(name)
+      map.set(category, list)
+    }
+    for (const [cat, list] of map.entries()) {
+      map.set(cat, Array.from(new Set(list)).sort((a, b) => a.localeCompare(b)))
+    }
+    return map
+  }, [inventoryItems])
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -97,18 +125,24 @@ export default function PlanningPage() {
 
   useEffect(() => {
     if (!selectedOrder) {
-      setPlanningPic("")
+      setApprovedBy("")
+      setApprovedDate("")
+      setApprovedTime("")
       setLines([createEmptyLine()])
       setIsLocked(false)
       return
     }
-    setPlanningPic(selectedOrder.materialPlanning?.confirmedBy || "")
+    const mp = selectedOrder.materialPlanning
+    const now = new Date()
+    setApprovedBy(mp?.approvedBy || mp?.confirmedBy || "")
+    setApprovedDate(mp?.approvedDate || now.toISOString().slice(0, 10))
+    setApprovedTime(mp?.approvedTime || now.toTimeString().slice(0, 5))
     setLines(
       selectedOrder.materialPlanning?.lines?.length
         ? selectedOrder.materialPlanning.lines.map((l) => ({ ...l }))
         : [createEmptyLine()],
     )
-    setIsLocked(Boolean(selectedOrder.materialPlanning?.confirmedBy))
+    setIsLocked(Boolean(mp?.approvedBy || mp?.confirmedBy))
   }, [selectedOrderNumber])
 
   const updateLine = (idx: number, patch: Partial<MaterialPlanningLine>) => {
@@ -132,8 +166,12 @@ export default function PlanningPage() {
 
   const save = () => {
     if (!selectedOrder) return
-    if (!planningPic.trim()) {
-      showAlert("Please enter Planning PIC.", { title: "Missing Planning PIC", actionText: "OK" })
+    if (!approvedBy.trim()) {
+      showAlert("Please enter Approved by.", { title: "Missing Approved by", actionText: "OK" })
+      return
+    }
+    if (!approvedDate.trim() || !approvedTime.trim()) {
+      showAlert("Please enter approval date and time.", { title: "Missing approval timestamp", actionText: "OK" })
       return
     }
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
@@ -141,7 +179,10 @@ export default function PlanningPage() {
       materialPlanning: {
         lines: normalizedLines.length ? normalizedLines : [createEmptyLine()],
         updatedAt: new Date().toISOString(),
-        confirmedBy: planningPic.trim(),
+        approvedBy: approvedBy.trim(),
+        approvedDate: approvedDate.trim(),
+        approvedTime: approvedTime.trim(),
+        confirmedBy: approvedBy.trim(),
       },
       updatedAt: new Date().toISOString(),
     }))
@@ -199,7 +240,7 @@ export default function PlanningPage() {
     }))
     setSelectedOrderNumber("")
     load()
-    showAlert("Sent back to Sales Confirmation.", { title: "Sent back", actionText: "OK" })
+    showAlert("Sent back to Sales order.", { title: "Sent back", actionText: "OK" })
     router.push("/portal/sales-confirmation")
   }
 
@@ -381,7 +422,7 @@ export default function PlanningPage() {
                     className="gap-2 bg-transparent"
                     onClick={() => router.push(`/portal/sales-confirmation?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
                   >
-                    Return to Sales Confirmation
+                    Return to Sales order
                   </Button>
                   <Button variant="outline" className="gap-2 bg-transparent" onClick={openFlag} disabled={selectedOrder.hasIssue}>
                     <AlertCircle className="h-4 w-4" />
@@ -397,22 +438,17 @@ export default function PlanningPage() {
                 </div>
               </div>
 
-              <div className="grid gap-2">
-                <Label>Planning PIC *</Label>
-                <Input value={planningPic} onChange={(e) => setPlanningPic(e.target.value)} placeholder="Name" disabled={isLocked} />
-              </div>
-
               <div className="overflow-auto rounded-lg border border-border">
-                <table className="w-full text-sm">
+                <table className="w-full min-w-[1100px] text-sm">
                   <thead className="bg-muted/40">
                     <tr className="text-left">
                       <th className="p-3 w-10">#</th>
-                      <th className="p-3 w-56">Category</th>
-                      <th className="p-3">Item</th>
-                      <th className="p-3 w-28">Qty</th>
-                      <th className="p-3 w-40">PIC</th>
-                      <th className="p-3 w-44">Purchasing required</th>
-                      <th className="p-3 w-28" />
+                      <th className="p-3 w-64">Category</th>
+                      <th className="p-3 min-w-[360px]">Item</th>
+                      <th className="p-3 w-36">Qty</th>
+                      <th className="p-3 w-48">PIC</th>
+                      <th className="p-3 w-40">Purchasing required</th>
+                      <th className="p-3 w-12" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
@@ -437,8 +473,19 @@ export default function PlanningPage() {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="p-3">
-                          <Input value={l.item} onChange={(e) => updateLine(idx, { item: e.target.value })} disabled={isLocked} />
+                        <td className="p-3 min-w-[360px]">
+                          <Input
+                            value={l.item}
+                            onChange={(e) => updateLine(idx, { item: e.target.value })}
+                            disabled={isLocked}
+                            list={`planning-item-options-${idx}`}
+                            placeholder="Choose or type item"
+                          />
+                          <datalist id={`planning-item-options-${idx}`}>
+                            {(inventoryNamesByCategory.get(l.category) ?? []).map((name) => (
+                              <option key={name} value={name} />
+                            ))}
+                          </datalist>
                         </td>
                         <td className="p-3">
                           <Input value={l.quantity} onChange={(e) => updateLine(idx, { quantity: e.target.value })} disabled={isLocked} />
@@ -465,17 +512,36 @@ export default function PlanningPage() {
                           <Button
                             type="button"
                             variant="outline"
+                            size="icon"
                             className="bg-transparent"
                             onClick={() => removeLine(idx)}
                             disabled={isLocked || lines.length <= 1}
+                            title="Remove line"
                           >
-                            Remove
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label>Approved by *</Label>
+                    <Input value={approvedBy} onChange={(e) => setApprovedBy(e.target.value)} placeholder="Name" disabled={isLocked} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Date *</Label>
+                    <Input type="date" value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} disabled={isLocked} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Time *</Label>
+                    <Input type="time" value={approvedTime} onChange={(e) => setApprovedTime(e.target.value)} disabled={isLocked} />
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2 justify-between">

@@ -264,6 +264,7 @@ export default function PackingPage() {
 
   const confirmSendBackToPlanning = () => {
     if (!selectedOrder) return
+    const orderNumber = selectedOrder.orderNumber
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
       status: "planning" as const,
@@ -275,6 +276,7 @@ export default function PackingPage() {
     setMaterialLines(DEFAULT_MATERIAL_PLANNING_LINES.map((l) => ({ ...l })))
     showAlert("Order sent back to Planning!", { title: "Sent Back" })
     setShowSendBackConfirm(false)
+    router.push(`/portal/planning?order=${encodeURIComponent(orderNumber)}`)
   }
 
   const confirmDelete = () => {
@@ -930,14 +932,7 @@ export default function PackingPage() {
                       disabled={isFormLocked}
                     >
                       <Undo2 className="h-4 w-4" />
-                      Send Back to Planning
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => selectedOrder && router.push(`/portal/procurement?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
-                      className="gap-2 bg-transparent"
-                    >
-                      Return to Procurement
+                      Send back to Planning stage
                     </Button>
                     <Button
                       variant="outline"

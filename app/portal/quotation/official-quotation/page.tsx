@@ -2,12 +2,15 @@
 
 import Link from "next/link"
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
   getOfficialQuotations,
   deleteOfficialQuotation,
+  addOfficialQuotation,
   OFFICIAL_QUOTATIONS_UPDATED_EVENT,
+  createOfficialQuotationManual,
   type OfficialQuotation,
 } from "@/lib/official-quotation-storage"
 import { ExternalLink, Search, Eye, Trash2 } from "lucide-react"
@@ -15,6 +18,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { OrderProgress } from "@/components/portal/order-progress"
 
 export default function OfficialQuotationListPage() {
+  const router = useRouter()
   const [items, setItems] = useState<OfficialQuotation[]>([])
   const [query, setQuery] = useState("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
@@ -56,20 +60,32 @@ export default function OfficialQuotationListPage() {
         <div className="min-w-0">
           <h1 className="truncate text-lg font-semibold text-foreground">Official quotation</h1>
           <p className="text-sm text-muted-foreground">
-            Web form submissions (from the "Webpage live" quotation page).
+            Two streams: Web form submissions and manual quotations created directly here.
           </p>
         </div>
 
-        <a
-          href="/etre-patisserie-quotation-page"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary"
-          title="Open quotation webpage in new tab"
-        >
-          <ExternalLink className="h-4 w-4" />
-          Open webpage
-        </a>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            onClick={() => {
+              const entry = createOfficialQuotationManual({ createdBy: "Manual" })
+              addOfficialQuotation(entry)
+              router.push(`/portal/quotation/official-quotation/${encodeURIComponent(entry.id)}`)
+            }}
+          >
+            Create official quotation
+          </Button>
+          <a
+            href="/etre-patisserie-quotation-page"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary"
+            title="Open quotation webpage in new tab"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open webpage
+          </a>
+        </div>
       </div>
 
       <div className="relative max-w-xl">
@@ -97,6 +113,7 @@ export default function OfficialQuotationListPage() {
               <thead className="bg-secondary/40">
                 <tr className="text-xs text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Quotation ID</th>
+                  <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Quotation Date</th>
                   <th className="px-4 py-3 font-medium">Quotation Time</th>
                   <th className="px-4 py-3 font-medium">PIC</th>
@@ -116,6 +133,7 @@ export default function OfficialQuotationListPage() {
                   const company = item.request.customer.companyName || "-"
                   const eventDate = item.request.event.eventDate || "-"
                   const pic = item.generatedData?.madeBy || item.createdBy || "-"
+                  const source = item.source === "manual" ? "Manual" : "Webpage"
                   return (
                     <tr key={item.id} className="text-sm hover:bg-secondary/30">
                       <td className="px-4 py-3">
@@ -126,6 +144,7 @@ export default function OfficialQuotationListPage() {
                           {item.id}
                         </Link>
                       </td>
+                      <td className="px-4 py-3 text-muted-foreground">{source}</td>
                       <td className="px-4 py-3 text-muted-foreground">{qDate}</td>
                       <td className="px-4 py-3 text-muted-foreground">{qTime}</td>
                       <td className="px-4 py-3 text-muted-foreground">{pic}</td>

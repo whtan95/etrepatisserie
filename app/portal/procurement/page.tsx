@@ -13,6 +13,9 @@ import { AlertCircle, Calendar, ClipboardList, Search } from "lucide-react"
 import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
+import type { InventoryItem } from "@/lib/inventory"
+import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
+import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage } from "@/lib/inventory-storage"
 
 function formatDate(dateString: string) {
   if (!dateString) return "-"
@@ -29,12 +32,17 @@ export default function ProcurementPage() {
   const { alertState, showAlert, closeAlert } = useAppAlert()
 
   const [orders, setOrders] = useState<SalesOrder[]>([])
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(DEFAULT_INVENTORY_ITEMS)
   const [search, setSearch] = useState("")
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [note, setNote] = useState("")
+  const [procurementPersonnel, setProcurementPersonnel] = useState("")
+  const [procurementDate, setProcurementDate] = useState("")
+  const [procurementTime, setProcurementTime] = useState("")
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [sendBackOpen, setSendBackOpen] = useState(false)
   const [flagPersonnel, setFlagPersonnel] = useState("")
   const [flagIssue, setFlagIssue] = useState("")
 
@@ -49,6 +57,28 @@ export default function ProcurementPage() {
     load()
   }, [])
 
+  useEffect(() => {
+    if (!hasInventoryDbInLocalStorage()) return
+    const db = getInventoryDbFromLocalStorage()
+    if (db?.items?.length) setInventoryItems(db.items)
+  }, [])
+
+  const inventoryNamesByCategory = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const it of inventoryItems) {
+      const category = (it.category || "").trim()
+      const name = (it.name || "").trim()
+      if (!category || !name) continue
+      const list = map.get(category) ?? []
+      list.push(name)
+      map.set(category, list)
+    }
+    for (const [cat, list] of map.entries()) {
+      map.set(cat, Array.from(new Set(list)).sort((a, b) => a.localeCompare(b)))
+    }
+    return map
+  }, [inventoryItems])
+
   const selectedOrder = useMemo(
     () => orders.find((o) => o.orderNumber === selectedOrderNumber) || null,
     [orders, selectedOrderNumber],
@@ -57,9 +87,16 @@ export default function ProcurementPage() {
   useEffect(() => {
     if (!selectedOrder) {
       setNote("")
+      setProcurementPersonnel("")
+      setProcurementDate("")
+      setProcurementTime("")
       return
     }
     setNote("")
+    const now = new Date()
+    setProcurementPersonnel(selectedOrder.procurementData?.personnel || "")
+    setProcurementDate(selectedOrder.procurementData?.date || now.toISOString().slice(0, 10))
+    setProcurementTime(selectedOrder.procurementData?.time || now.toTimeString().slice(0, 5))
   }, [selectedOrder])
 
   const filtered = useMemo(() => {
@@ -76,14 +113,76 @@ export default function ProcurementPage() {
     })
   }, [orders, search])
 
-  const purchasingLines: MaterialPlanningLine[] = useMemo(() => {
+  type PurchasingLine = MaterialPlanningLine & { lineIndex: number }
+  const purchasingLines: PurchasingLine[] = useMemo(() => {
     if (!selectedOrder?.materialPlanning?.lines) return []
-    return selectedOrder.materialPlanning.lines.filter((l) => l.purchasingRequired)
+    return selectedOrder.materialPlanning.lines
+      .map((l, idx) => ({ ...l, lineIndex: idx }))
+      .filter((l) => l.purchasingRequired)
   }, [selectedOrder])
+
+  const [purchasingEdits, setPurchasingEdits] = useState<PurchasingLine[]>([])
+
+  useEffect(() => {
+    setPurchasingEdits(purchasingLines.map((l) => ({ ...l })))
+  }, [selectedOrderNumber])
+
+  const updatePurchasingLine = (lineIndex: number, patch: Partial<PurchasingLine>) => {
+    setPurchasingEdits((prev) => prev.map((l) => (l.lineIndex === lineIndex ? { ...l, ...patch } : l)))
+  }
+
+  const savePurchasingEdits = (orderNumber: string) => {
+    updateOrderByNumber(orderNumber, (order) => {
+      if (!order.materialPlanning?.lines?.length) return { ...order, updatedAt: new Date().toISOString() }
+      const nextLines = order.materialPlanning.lines.map((l, idx) => {
+        const edited = purchasingEdits.find((p) => p.lineIndex === idx)
+        if (!edited) return l
+        return {
+          ...l,
+          item: edited.item || "",
+          poDate: edited.poDate || "",
+          supplier: edited.supplier || "",
+          estimatedArrivalTime: edited.estimatedArrivalTime || "",
+          arrivalDate: edited.arrivalDate || "",
+        }
+      })
+
+      return {
+        ...order,
+        materialPlanning: {
+          ...order.materialPlanning,
+          lines: nextLines,
+          updatedAt: new Date().toISOString(),
+        },
+        updatedAt: new Date().toISOString(),
+      }
+    })
+  }
 
   const markDone = () => {
     if (!selectedOrder) return
     setConfirmOpen(true)
+  }
+
+  const sendBackToPlanningStage = () => {
+    if (!selectedOrder) return
+    setSendBackOpen(true)
+  }
+
+  const confirmSendBackToPlanningStage = () => {
+    if (!selectedOrder) return
+
+    savePurchasingEdits(selectedOrder.orderNumber)
+    updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
+      ...order,
+      status: "planning",
+      updatedAt: new Date().toISOString(),
+    }))
+
+    setSendBackOpen(false)
+    load()
+    showAlert("Order sent back to Planning stage.", { title: "Sent back", actionText: "OK" })
+    router.push(`/portal/planning?order=${encodeURIComponent(selectedOrder.orderNumber)}`)
   }
 
   const openFlag = () => {
@@ -123,6 +222,12 @@ export default function ProcurementPage() {
 
   const confirmDone = () => {
     if (!selectedOrder) return
+    if (!procurementPersonnel.trim() || !procurementDate.trim() || !procurementTime.trim()) {
+      showAlert("Please fill in procurement personnel, date, and time.", { title: "Missing info", actionText: "OK" })
+      return
+    }
+
+    savePurchasingEdits(selectedOrder.orderNumber)
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
       status: "packing",
@@ -153,6 +258,12 @@ export default function ProcurementPage() {
       customerData: note.trim()
         ? { ...order.customerData, specialRequest: [order.customerData.specialRequest, `Procurement note: ${note.trim()}`].filter(Boolean).join("\n") }
         : order.customerData,
+      procurementData: {
+        personnel: procurementPersonnel.trim(),
+        date: procurementDate.trim(),
+        time: procurementTime.trim(),
+        updatedAt: new Date().toISOString(),
+      },
     }))
 
     setConfirmOpen(false)
@@ -202,6 +313,15 @@ export default function ProcurementPage() {
           </div>
         </div>
       </ConfirmDialog>
+      <ConfirmDialog
+        open={sendBackOpen}
+        title="Send back to Planning stage?"
+        description="This will move the order back to Planning so the planning lines can be updated."
+        confirmText="Send back"
+        cancelText="Cancel"
+        onConfirm={confirmSendBackToPlanningStage}
+        onCancel={() => setSendBackOpen(false)}
+      />
       <ConfirmDialog
         open={deleteOpen}
         title="Delete this order?"
@@ -307,9 +427,9 @@ export default function ProcurementPage() {
                   <Button
                     variant="outline"
                     className="bg-transparent"
-                    onClick={() => router.push(`/portal/planning?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
+                    onClick={sendBackToPlanningStage}
                   >
-                    Return to Planning
+                    Send back to Planning stage
                   </Button>
                   <Button
                     variant="outline"
@@ -327,24 +447,68 @@ export default function ProcurementPage() {
                   <p className="text-sm text-muted-foreground">No purchasing required items were flagged in Planning.</p>
                 ) : (
                   <div className="overflow-auto rounded-md border border-border bg-card">
-                    <table className="w-full text-sm">
+                    <table className="w-full min-w-[1200px] text-sm">
                       <thead className="bg-muted/40">
                         <tr className="text-left">
                           <th className="p-3 w-10">#</th>
-                          <th className="p-3">Category</th>
-                          <th className="p-3">Item</th>
+                          <th className="p-3 w-56">Category</th>
+                          <th className="p-3 min-w-[360px]">Item</th>
                           <th className="p-3 w-28">Qty</th>
                           <th className="p-3 w-36">PIC</th>
+                          <th className="p-3 w-36">PO date</th>
+                          <th className="p-3 w-56">Supplier</th>
+                          <th className="p-3 w-40">ETA date</th>
+                          <th className="p-3 w-36">Arrival date</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {purchasingLines.map((l, idx) => (
+                        {purchasingEdits.map((l, idx) => (
                           <tr key={idx} className="border-t border-border">
                             <td className="p-3">{idx + 1}</td>
-                            <td className="p-3">{l.category}</td>
-                            <td className="p-3">{l.item}</td>
+                            <td className="p-3 w-56">{l.category}</td>
+                            <td className="p-3 min-w-[360px]">
+                              <Input
+                                value={l.item}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { item: e.target.value })}
+                                list={`proc-item-options-${idx}`}
+                                placeholder="Choose or type item"
+                              />
+                              <datalist id={`proc-item-options-${idx}`}>
+                                {(inventoryNamesByCategory.get(l.category) ?? []).map((name) => (
+                                  <option key={name} value={name} />
+                                ))}
+                              </datalist>
+                            </td>
                             <td className="p-3">{l.quantity}</td>
                             <td className="p-3">{l.picName}</td>
+                            <td className="p-3">
+                              <Input
+                                type="date"
+                                value={l.poDate || ""}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { poDate: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                value={l.supplier || ""}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { supplier: e.target.value })}
+                                placeholder="Supplier"
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="date"
+                                value={l.estimatedArrivalTime || ""}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { estimatedArrivalTime: e.target.value })}
+                              />
+                            </td>
+                            <td className="p-3">
+                              <Input
+                                type="date"
+                                value={l.arrivalDate || ""}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { arrivalDate: e.target.value })}
+                              />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -356,6 +520,23 @@ export default function ProcurementPage() {
               <div className="grid gap-2">
                 <Label>Procurement Note (optional)</Label>
                 <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for delivery / team..." />
+              </div>
+
+              <div className="rounded-lg border border-border bg-muted/20 p-4">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1">
+                    <Label>Procurement personnel *</Label>
+                    <Input value={procurementPersonnel} onChange={(e) => setProcurementPersonnel(e.target.value)} placeholder="Name" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Date *</Label>
+                    <Input type="date" value={procurementDate} onChange={(e) => setProcurementDate(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Time *</Label>
+                    <Input type="time" value={procurementTime} onChange={(e) => setProcurementTime(e.target.value)} />
+                  </div>
+                </div>
               </div>
 
               <div className="flex justify-end">

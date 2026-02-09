@@ -3,7 +3,58 @@ import type { OrderItem } from "@/lib/types"
 
 export type OfficialQuotationStatus = "new" | "generated" | "archived"
 
-export type OfficialQuotationSource = "webpage"
+export type OfficialQuotationSource = "webpage" | "manual"
+
+function createEmptyQuoteRequestData(): QuoteRequestData {
+  return {
+    event: {
+      eventName: "",
+      eventDate: "",
+      eventType: "",
+      estimatedGuests: 0,
+      takeOutSetupDate: "",
+      takeOutDismantleDate: "",
+      returningRequired: true,
+      budgetPerPersonFromRm: "",
+      budgetPerPersonToRm: "",
+      eventLocation: "",
+      otherAreaName: "",
+      otherVenueType: "",
+    },
+    branding: {
+      includeBrandLogo: false,
+      matchBrandColours: false,
+      logoOnDessert: false,
+      logoOnPackaging: false,
+      logoOnOthers: false,
+      logoOnOthersText: "",
+      colourOnDessert: false,
+      colourOnPackaging: false,
+      colourOnOthers: false,
+      colourOnOthersText: "",
+    },
+    menu: {
+      customisationLevel: "",
+      customisationNotes: "",
+      referenceImageName: "",
+      referenceImageDataUrl: "",
+      categories: [],
+      itemQuantities: {},
+      dessertSize: "",
+      drinks: [],
+      drinksOtherText: "",
+      packaging: "",
+    },
+    customer: {
+      companyName: "",
+      name: "",
+      phone: "",
+      email: "",
+      address: "",
+      notes: "",
+    },
+  }
+}
 
 export interface OfficialQuotationGeneratedData {
   quotationDate: string
@@ -122,5 +173,17 @@ export function createOfficialQuotationFromWebRequest(input: {
     createdBy: input.createdBy ?? "Web form",
     status: "new",
     request: input.request,
+  }
+}
+
+export function createOfficialQuotationManual(input?: { createdBy?: string; now?: Date }): OfficialQuotation {
+  const now = input?.now ?? new Date()
+  return {
+    id: generateOfficialQuotationId(now),
+    createdAt: now.toISOString(),
+    source: "manual",
+    createdBy: input?.createdBy ?? "Manual",
+    status: "new",
+    request: createEmptyQuoteRequestData(),
   }
 }

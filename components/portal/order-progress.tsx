@@ -10,6 +10,7 @@ interface OrderProgressProps {
   currentPhase?: number
   currentStatus?: OrderStatus
   currentStep?: "request-for-quotation" | "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice" | "payment"
+  startFromStep?: "request-for-quotation" | "quotation" | "sales-confirmation" | "planning" | "procurement" | "packing" | "delivery" | "returning" | "invoice" | "payment"
   orderNumber?: string
   clickable?: boolean
   hasIssue?: boolean
@@ -29,6 +30,7 @@ export function OrderProgress({
   currentPhase,
   currentStatus,
   currentStep,
+  startFromStep,
   orderNumber,
   clickable = true,
   hasIssue = false,
@@ -46,7 +48,7 @@ export function OrderProgress({
       label: "Quotation",
       path: quotationPath || (orderSource === "ad-hoc" ? "/portal/ad-hoc" : "/portal/sales-order"),
     },
-    { key: "sales-confirmation", label: "Sales Confirmation", path: "/portal/sales-confirmation" },
+    { key: "sales-confirmation", label: "Sales order", path: "/portal/sales-confirmation" },
     { key: "planning", label: "Planning", path: "/portal/planning" },
     { key: "procurement", label: "Procurement", path: "/portal/procurement" },
     { key: "packing", label: "Packing", path: "/portal/packing" },
@@ -58,10 +60,13 @@ export function OrderProgress({
 
   const resolvedRequiresDismantle = requiresDismantle ?? adHocOptions?.requiresDismantle ?? true
 
-  const phases = allPhases.filter((phase) => {
+  const filteredPhases = allPhases.filter((phase) => {
     if (phase.key === "returning") return resolvedRequiresDismantle
     return true
   })
+
+  const startIndex = startFromStep ? Math.max(0, filteredPhases.findIndex((p) => p.key === startFromStep)) : 0
+  const phases = filteredPhases.slice(startIndex)
 
   const statusToStep = (status: OrderStatus | undefined): OrderProgressProps["currentStep"] => {
     if (!status) return undefined

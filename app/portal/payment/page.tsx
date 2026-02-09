@@ -501,7 +501,7 @@ export default function PaymentPage() {
               <div className="mt-4 rounded-lg border border-border bg-muted/20 p-4 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground mb-2">Sales Confirmation</h3>
+                    <h3 className="text-sm font-semibold text-foreground mb-2">Sales order</h3>
                     <p className="text-sm text-muted-foreground">Sales Order No: {selectedOrder.orderMeta?.salesOrderNumber || "-"}</p>
                     <p className="text-sm text-muted-foreground">Personnel: {selectedOrder.additionalInfo?.schedulingPersonnel || "-"}</p>
                     <p className="text-sm text-muted-foreground">Date: {selectedOrder.additionalInfo?.schedulingDate || "-"}</p>
@@ -618,7 +618,7 @@ export default function PaymentPage() {
                 className="gap-2 bg-transparent text-orange-600 border-orange-300 hover:bg-orange-50"
               >
                 <Undo2 className="h-4 w-4" />
-                Send Back to Sales Confirmation
+                Send Back to Sales order
               </Button>
               <Button
                 variant="outline"

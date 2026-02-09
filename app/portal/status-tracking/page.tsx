@@ -183,7 +183,7 @@ export default function StatusTrackingPage() {
       [
         { status: "rfq", title: "Request for quotation" },
         { status: "draft", title: "Quotation" },
-        { status: "scheduling", title: "Sales Confirmation" },
+        { status: "scheduling", title: "Sales order" },
         { status: "planning", title: "Planning" },
         { status: "procurement", title: "Procurement" },
         { status: "packing", title: "Packing" },
@@ -226,7 +226,7 @@ export default function StatusTrackingPage() {
       <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-foreground">Sales Orders</h1>
           <p className="text-sm text-muted-foreground">
-            Request for quotation → Quotation → Sales Confirmation → Planning → Procurement → Packing → Delivery → Returning (optional) → Invoice → Payment.
+            Request for quotation → Quotation → Sales order → Planning → Procurement → Packing → Delivery → Returning (optional) → Invoice → Payment.
           </p>
         </div>
 

@@ -86,7 +86,7 @@ const sidebarItems: SidebarItem[] = [
       ],
   },
   {
-    title: "Sales Confirmation",
+    title: "Sales order",
     href: "/portal/sales-confirmation",
     icon: CheckCircle,
   },
@@ -250,7 +250,7 @@ export default function PortalLayout({
     if (pathname.includes("/quotation/official-quotation")) return "Official quotation"
     if (pathname.includes("/quotation/request-for-quotation")) return "Request for quotation"
     if (pathname.includes("/quotation/webpage-live")) return "Webpage live"
-    if (pathname.includes("/sales-confirmation")) return "Sales Confirmation"
+    if (pathname.includes("/sales-confirmation")) return "Sales order"
     if (pathname.includes("/planning")) return "Planning"
     if (pathname.includes("/packing")) return "Packing"
     if (pathname.includes("/procurement")) return "Procurement"

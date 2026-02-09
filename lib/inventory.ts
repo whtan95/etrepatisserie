@@ -14,7 +14,7 @@ export type InventoryItem = {
 }
 
 export type InventoryDb = {
-  version: 3
+  version: 4
   items: InventoryItem[]
   updatedAt: string
 }
@@ -233,7 +233,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-SAV-SND-EGG",
     sku: "ETR-SAV-SND-EGG",
-    category: "Savoury",
+    category: "Tart & Savoury",
     name: "Japanese Egg Mayo Sando",
     normalSizePrice: 21,
     petitSizePrice: 0,
@@ -247,7 +247,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-SAV-SND-HAM",
     sku: "ETR-SAV-SND-HAM",
-    category: "Savoury",
+    category: "Tart & Savoury",
     name: "Chicken Ham & Cheese Sando",
     normalSizePrice: 19,
     petitSizePrice: 0,
@@ -261,7 +261,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-SAV-QCH-DCK",
     sku: "ETR-SAV-QCH-DCK",
-    category: "Savoury",
+    category: "Tart & Savoury",
     name: "Smoked Duck Quiche",
     normalSizePrice: 18,
     petitSizePrice: 0,
@@ -275,7 +275,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-SAV-QCH-MSH",
     sku: "ETR-SAV-QCH-MSH",
-    category: "Savoury",
+    category: "Tart & Savoury",
     name: "Mushroom Quiche",
     normalSizePrice: 17,
     petitSizePrice: 0,
@@ -373,7 +373,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-TRT-BKF-CHY",
     sku: "ETR-TRT-BKF-CHY",
-    category: "Tart",
+    category: "Tart & Savoury",
     name: "Black Forest Tart",
     normalSizePrice: 22,
     petitSizePrice: 0,
@@ -387,7 +387,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-TRT-LMN-CLD",
     sku: "ETR-TRT-LMN-CLD",
-    category: "Tart",
+    category: "Tart & Savoury",
     name: "Lemon Tart",
     normalSizePrice: 22,
     petitSizePrice: 0,
@@ -401,7 +401,7 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
   {
     id: "ETR-TRT-VAN-EGT",
     sku: "ETR-TRT-VAN-EGT",
-    category: "Tart",
+    category: "Tart & Savoury",
     name: "French Vanilla Egg Tart",
     normalSizePrice: 13,
     petitSizePrice: 0,
@@ -454,6 +454,217 @@ export const DEFAULT_INVENTORY_ITEMS: InventoryItem[] = [
     notes: "Festive only",
     defaultSst: false,
   },
+  // Packaging & event items (used by Planning / Procurement)
+  {
+    id: "ETR-PKG-BOX",
+    sku: "ETR-PKG-BOX",
+    category: "Product packaging",
+    name: "Box",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "box",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-PKG-STICKER",
+    sku: "ETR-PKG-STICKER",
+    category: "Product packaging",
+    name: "Sticker",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-PKG-RIBBON",
+    sku: "ETR-PKG-RIBBON",
+    category: "Product packaging",
+    name: "Ribbon",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "roll",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-PLT-RACK",
+    sku: "ETR-PLT-RACK",
+    category: "Plating equipments",
+    name: "Plating rack",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "set",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-PLT-DISPLAY-STAND",
+    sku: "ETR-PLT-DISPLAY-STAND",
+    category: "Plating equipments",
+    name: "Display stand",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "set",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-PLT-FRUIT-STAND-3T",
+    sku: "ETR-PLT-FRUIT-STAND-3T",
+    category: "Plating equipments",
+    name: "3 tier fruit stand",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "set",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-SVC-TONGS",
+    sku: "ETR-SVC-TONGS",
+    category: "Service ware",
+    name: "Tongs",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-SVC-CUTLERY",
+    sku: "ETR-SVC-CUTLERY",
+    category: "Service ware",
+    name: "Cutlery",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "set",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-SVC-NAPKIN",
+    sku: "ETR-SVC-NAPKIN",
+    category: "Service ware",
+    name: "Napkin",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "pack",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-LBL-TENT-CARD",
+    sku: "ETR-LBL-TENT-CARD",
+    category: "Labels & display",
+    name: "Product label tent card",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-LBL-ALLERGEN",
+    sku: "ETR-LBL-ALLERGEN",
+    category: "Labels & display",
+    name: "Allergen label",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-LBL-EVENT-NAME",
+    sku: "ETR-LBL-EVENT-NAME",
+    category: "Labels & display",
+    name: "Event name cardboard",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-CREW-APRON",
+    sku: "ETR-CREW-APRON",
+    category: "Event day service crew",
+    name: "Apron",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "piece",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-CREW-GLOVE",
+    sku: "ETR-CREW-GLOVE",
+    category: "Event day service crew",
+    name: "Glove",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "pack",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
+  {
+    id: "ETR-CREW-HAIR-NET",
+    sku: "ETR-CREW-HAIR-NET",
+    category: "Event day service crew",
+    name: "Hair net",
+    normalSizePrice: 0,
+    petitSizePrice: 0,
+    unitType: "pack",
+    defaultMoq: 1,
+    status: "Active",
+    seasonal: false,
+    notes: "",
+    defaultSst: false,
+  },
 ]
 
 const asString = (value: unknown, fallback: string) =>
@@ -471,7 +682,8 @@ function normalizeItem(value: unknown): InventoryItem | null {
   const sku = asString(raw.sku, asString(raw.id, "")).toUpperCase()
   const id = asString(raw.id, sku).toUpperCase()
   const name = asString(raw.name, "")
-  const category = asString(raw.category, "Others")
+  const categoryRaw = asString(raw.category, "Others")
+  const category = categoryRaw === "Savoury" || categoryRaw === "Tart" ? "Tart & Savoury" : categoryRaw
   if (!id || !name) return null
   const normalizedSeasonal = asBoolean(raw.seasonal, false)
   const normalizedStatus = asString(raw.status, "Active")
@@ -516,7 +728,7 @@ export function normalizeInventoryDb(value: unknown): InventoryDb {
   ])
 
   const items =
-    version === 3
+    version >= 3
       ? (itemsRaw as unknown[])
           .map(normalizeItem)
           .filter((it): it is InventoryItem => Boolean(it))
@@ -539,9 +751,29 @@ export function normalizeInventoryDb(value: unknown): InventoryDb {
     return true
   })
 
+  // Migration: if old DB exists, ensure non-food defaults are present so Ops tabs aren't empty.
+  const NON_FOOD_CATEGORIES = new Set([
+    "Product packaging",
+    "Plating equipments",
+    "Service ware",
+    "Labels & display",
+    "Event day service crew",
+  ])
+
+  const migrated = [...deduped]
+  if (version < 4) {
+    const migratedIds = new Set(migrated.map((it) => it.id))
+    for (const def of DEFAULT_INVENTORY_ITEMS) {
+      if (!NON_FOOD_CATEGORIES.has(def.category)) continue
+      if (migratedIds.has(def.id)) continue
+      migratedIds.add(def.id)
+      migrated.push(def)
+    }
+  }
+
   return {
-    version: 3,
-    items: deduped,
+    version: 4,
+    items: migrated,
     updatedAt: asString(raw.updatedAt, new Date().toISOString()),
   }
 }

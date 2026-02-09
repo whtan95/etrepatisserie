@@ -415,7 +415,7 @@ export default function SettingUpPage() {
         ? "Order sent back to Packing!"
         : target === "procurement"
           ? "Order sent back to Procurement!"
-          : "Order sent back to Sales Confirmation!",
+          : "Order sent back to Sales order!",
       { title: "Sent Back" }
     )
   }
@@ -936,7 +936,7 @@ export default function SettingUpPage() {
               Send to Procurement
             </Button>
             <Button variant="outline" className="w-full justify-start bg-transparent" onClick={() => sendBackTo("scheduling")}>
-              Send to Sales Confirmation
+              Send to Sales order
             </Button>
           </div>
         </ConfirmDialog>

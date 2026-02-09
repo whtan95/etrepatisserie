@@ -11,20 +11,20 @@ export function hasInventoryDbInLocalStorage(): boolean {
 
 export function getInventoryDbFromLocalStorage(): InventoryDb {
   if (typeof window === "undefined") {
-    return { version: 3, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
+    return { version: 4, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
   }
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { version: 3, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
+    if (!raw) return { version: 4, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
     return normalizeInventoryDb(JSON.parse(raw))
   } catch {
-    return { version: 3, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
+    return { version: 4, items: DEFAULT_INVENTORY_ITEMS, updatedAt: new Date().toISOString() }
   }
 }
 
 export function saveInventoryDbToLocalStorage(items: InventoryItem[]): InventoryDb {
   const db = normalizeInventoryDb({
-    version: 3,
+    version: 4,
     items,
     updatedAt: new Date().toISOString(),
   })

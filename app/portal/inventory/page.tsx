@@ -13,8 +13,10 @@ import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
 import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage, saveInventoryDbToLocalStorage } from "@/lib/inventory-storage"
 
-const CATEGORIES = ["Viennoiserie", "Bread", "Savoury", "Petit Gateaux", "Tart", "Cheesecake", "Seasonal", "Others"] as const
-const UNIT_TYPES = ["piece", "loaf", "set", "box", "tray", "others"] as const
+const PASTRY_CATEGORIES = ["Viennoiserie", "Bread", "Tart & Savoury", "Petit Gateaux", "Seasonal", "Cheesecake"] as const
+const PACKAGING_CATEGORIES = ["Product packaging", "Plating equipments", "Service ware", "Labels & display", "Event day service crew"] as const
+const CATEGORIES = [...PASTRY_CATEGORIES, ...PACKAGING_CATEGORIES] as const
+const UNIT_TYPES = ["piece", "loaf", "set", "box", "tray", "pack", "roll", "others"] as const
 const STATUSES = ["Active", "Inactive", "Active (Seasonal)"] as const
 
 function asNumber(value: string): number {
@@ -31,12 +33,25 @@ export default function InventoryPage() {
   )
   const [isSaving, setIsSaving] = useState(false)
   const [search, setSearch] = useState("")
+  const [groupView, setGroupView] = useState<"all" | "pastry" | "packaging">("all")
+
+  const normalizeCategory = (input: string) => {
+    const raw = (input || "").trim()
+    if (raw === "Savoury" || raw === "Tart") return "Tart & Savoury"
+    return raw
+  }
 
   useEffect(() => {
     if (hasInventoryDbInLocalStorage()) {
       const localDb = getInventoryDbFromLocalStorage()
       if (Array.isArray(localDb.items) && localDb.items.length) {
-        setItems(localDb.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
+        setItems(
+          localDb.items.map((it: InventoryItem) => ({
+            ...it,
+            category: normalizeCategory(it.category),
+            rowId: crypto.randomUUID(),
+          })),
+        )
       }
     }
 
@@ -50,7 +65,11 @@ export default function InventoryPage() {
           // If localStorage already has data, prefer it. Otherwise hydrate from API and mirror to localStorage.
           const hasLocal = hasInventoryDbInLocalStorage()
           if (!hasLocal) {
-            const saved = saveInventoryDbToLocalStorage(data.inventory.items)
+            const normalizedIncoming = data.inventory.items.map((it: InventoryItem) => ({
+              ...it,
+              category: normalizeCategory(it.category),
+            }))
+            const saved = saveInventoryDbToLocalStorage(normalizedIncoming)
             setItems(saved.items.map((it: InventoryItem) => ({ ...it, rowId: crypto.randomUUID() })))
           }
         }
@@ -65,8 +84,9 @@ export default function InventoryPage() {
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase()
-    if (!term) return items
-    return items.filter((it) => {
+    const base = !term
+      ? items
+      : items.filter((it) => {
       const haystack = [
         it.sku,
         it.id,
@@ -77,11 +97,19 @@ export default function InventoryPage() {
         it.notes,
       ]
         .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-      return haystack.includes(term)
+          .join(" ")
+          .toLowerCase()
+        return haystack.includes(term)
+      })
+
+    if (groupView === "all") return base
+    const pastrySet = new Set<string>(PASTRY_CATEGORIES)
+    const packagingSet = new Set<string>(PACKAGING_CATEGORIES)
+    return base.filter((it) => {
+      const cat = normalizeCategory(it.category)
+      return groupView === "packaging" ? packagingSet.has(cat) : pastrySet.has(cat)
     })
-  }, [items, search])
+  }, [items, search, groupView])
 
   const addItem = () => {
     setItems((prev) => [
@@ -90,7 +118,7 @@ export default function InventoryPage() {
         rowId: crypto.randomUUID(),
         id: "",
         sku: "",
-        category: "Others",
+        category: groupView === "packaging" ? PACKAGING_CATEGORIES[0] : PASTRY_CATEGORIES[0],
         name: "",
         normalSizePrice: 0,
         petitSizePrice: 0,
@@ -121,7 +149,7 @@ export default function InventoryPage() {
           id: sku,
           sku,
           name: it.name.trim(),
-          category: it.category.trim() || "Others",
+          category: normalizeCategory(it.category),
           normalSizePrice: Number.isFinite(it.normalSizePrice) ? it.normalSizePrice : 0,
           petitSizePrice: Number.isFinite(it.petitSizePrice) ? it.petitSizePrice : 0,
           unitType: (it.unitType || "").trim() || "piece",
@@ -153,7 +181,7 @@ export default function InventoryPage() {
         const res = await fetch("/api/inventory", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: withoutEmpty, version: 3 }),
+          body: JSON.stringify({ items: withoutEmpty, version: 4 }),
         })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data?.success && Array.isArray(data.inventory?.items)) {
@@ -198,10 +226,23 @@ export default function InventoryPage() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4 space-y-4">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px]">
+        <div className="grid gap-3 md:grid-cols-[1fr_240px]">
           <div className="space-y-2">
             <Label>Search</Label>
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search SKU, name, category..." />
+          </div>
+          <div className="space-y-2">
+            <Label>View</Label>
+            <Select value={groupView} onValueChange={(v) => setGroupView(v as "all" | "pastry" | "packaging")}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="pastry">Pastry & dessert</SelectItem>
+                <SelectItem value="packaging">Non-food (Ops)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -209,16 +250,16 @@ export default function InventoryPage() {
           <table className="w-full text-sm">
             <thead className="bg-muted/40">
               <tr className="text-left">
-                <th className="p-3 w-44">SKU</th>
-                <th className="p-3 w-52">Category</th>
-                <th className="p-3 min-w-[260px]">Product Name</th>
-                <th className="p-3 w-36">Normal Size Price (RM)</th>
-                <th className="p-3 w-36">Petit Size Price (RM)</th>
-                <th className="p-3 w-36">Unit Type</th>
-                <th className="p-3 w-36">Default MOQ</th>
-                <th className="p-3 w-44">Status</th>
-                <th className="p-3 w-32">Seasonal</th>
-                <th className="p-3 min-w-[220px]">Notes</th>
+                <th className="p-3 w-32">SKU</th>
+                <th className="p-3 w-44">Category</th>
+                <th className="p-3 min-w-[220px]">Product Name</th>
+                <th className="p-3 w-32">Normal (RM)</th>
+                <th className="p-3 w-32">Petit (RM)</th>
+                <th className="p-3 w-28">Unit</th>
+                <th className="p-3 w-28">MOQ</th>
+                <th className="p-3 w-40">Status</th>
+                <th className="p-3 w-28">Seasonal</th>
+                <th className="p-3 w-44">Notes</th>
                 <th className="p-3 w-14"></th>
               </tr>
             </thead>
@@ -338,7 +379,14 @@ export default function InventoryPage() {
                     </div>
                   </td>
                   <td className="p-3">
-                    <Input value={it.notes} onChange={(e) => updateItem(it.rowId, { notes: e.target.value })} placeholder="Notes" />
+                    <Input
+                      value={it.notes}
+                      onChange={(e) => updateItem(it.rowId, { notes: e.target.value })}
+                      placeholder="Short notes"
+                      maxLength={80}
+                      title={it.notes || ""}
+                      className="text-xs truncate overflow-hidden whitespace-nowrap"
+                    />
                   </td>
                   <td className="p-3">
                     <Button

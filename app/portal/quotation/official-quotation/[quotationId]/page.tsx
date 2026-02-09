@@ -35,6 +35,7 @@ import {
   Trash2,
   Eraser,
   RotateCcw,
+  Dices,
   Percent,
   X,
   MessageSquare,
@@ -80,12 +81,14 @@ export default function OfficialQuotationDetailPage() {
   const printRef = useRef<HTMLDivElement>(null)
 
   const [item, setItem] = useState<OfficialQuotation | null>(null)
+  const [requestDraft, setRequestDraft] = useState<OfficialQuotation["request"] | null>(null)
   const [loading, setLoading] = useState(true)
   const [madeBy, setMadeBy] = useState("")
   const [internalNotes, setInternalNotes] = useState("")
   const [quotationDate, setQuotationDate] = useState("")
   const [quotationTime, setQuotationTime] = useState("")
   const [isEditing, setIsEditing] = useState(false)
+  const [showRequestScript, setShowRequestScript] = useState(false)
 
   const isLocked = (item?.status === "generated" || item?.status === "archived") && !isEditing
 
@@ -168,7 +171,7 @@ export default function OfficialQuotationDetailPage() {
   // Calculate selected menu items from original quotation
   const originalMenuItems = useMemo(() => {
     if (!item) return []
-    const menu = item.request.menu
+    const menu = (requestDraft ?? item.request).menu
     const pairs = Object.entries(menu.itemQuantities || {})
       .map(([id, qty]) => ({ id, qty }))
       .filter((x) => Number.isFinite(x.qty) && x.qty > 0)
@@ -178,7 +181,7 @@ export default function OfficialQuotationDetailPage() {
       qty: x.qty,
       name: menuItemNameById.get(x.id) || x.id,
     }))
-  }, [item, menuItemNameById])
+  }, [item, menuItemNameById, requestDraft])
 
   // Load catalog
   useEffect(() => {
@@ -199,6 +202,8 @@ export default function OfficialQuotationDetailPage() {
     const found = getOfficialQuotationById(quotationId)
     if (found) {
       setItem(found)
+      setRequestDraft(found.request)
+      setShowRequestScript(found.source !== "manual")
       const saved = found.generatedData
       setMadeBy(saved?.madeBy ?? found.createdBy ?? "")
       setInternalNotes(saved?.internalNotes ?? "")
@@ -438,6 +443,73 @@ export default function OfficialQuotationDetailPage() {
     }
   }
 
+  const demoFillManual = () => {
+    if (!item) return
+    if (item.source !== "manual") return
+    const now = new Date()
+    const in7 = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    const iso = in7.toISOString().slice(0, 10)
+
+    setCustomerData((prev) => ({
+      ...prev,
+      companyName: "Demo Company",
+      customerName: "Demo Customer",
+      phone: "012-3456789",
+      email: "demo@example.com",
+      deliveryBuildingName: "Demo Venue",
+      deliveryAddressGate: "",
+      deliveryAddress1: "Jalan Demo 1",
+      deliveryAddress2: "",
+      deliveryCity: "Ipoh",
+      deliveryPostCode: "30000",
+      deliveryState: "Perak",
+      billingBuildingName: "Demo Company HQ",
+      billingAddressGate: "",
+      billingAddress1: "Jalan Demo 2",
+      billingAddress2: "",
+      billingCity: "Ipoh",
+      billingPostCode: "30000",
+      billingState: "Perak",
+      specialRequest: "Demo notes: customer prefers early setup.",
+    }))
+
+    setRequestDraft((prev) => {
+      const base = prev ?? item.request
+      return {
+        ...base,
+        event: {
+          ...base.event,
+          eventName: "Demo Event",
+          eventDate: iso,
+          eventType: "Corporate",
+          estimatedGuests: 80,
+          eventLocation: "others",
+          otherAreaName: "Customer venue (demo)",
+        },
+        customer: {
+          ...base.customer,
+          address: "Jalan Demo 1, 30000 Ipoh, Perak",
+        },
+      }
+    })
+
+    const sample = (catalog || DEFAULT_INVENTORY_ITEMS).filter((it) => it.category === "Viennoiserie" || it.category === "Petit Gateaux").slice(0, 2)
+    if (sample.length) {
+      setItems(
+        sample.map((it) => ({
+          inventoryId: it.id,
+          name: it.name,
+          description: "",
+          quantity: 30,
+          unitPrice: it.normalSizePrice || 0,
+          sstApplied: it.defaultSst || false,
+          sst: 0,
+          total: 0,
+        })),
+      )
+    }
+  }
+
   // Calculations
   const subtotal = useMemo(() => {
     return items.reduce((sum, item) => {
@@ -470,6 +542,18 @@ export default function OfficialQuotationDetailPage() {
   const saveToStorage = (opts?: { silent?: boolean }) => {
     if (!item) return
     const madeByClean = madeBy.trim() || item.createdBy || "Web form"
+    const baseRequest = requestDraft ?? item.request
+    const nextRequest: OfficialQuotation["request"] = {
+      ...baseRequest,
+      customer: {
+        ...baseRequest.customer,
+        companyName: customerData.companyName || "",
+        name: customerData.customerName || "",
+        phone: customerData.phone || "",
+        email: customerData.email || "",
+        notes: customerData.specialRequest || baseRequest.customer.notes || "",
+      },
+    }
     const generatedData: OfficialQuotation["generatedData"] = {
       quotationDate: quotationDate || toISODate(item.createdAt),
       quotationTime: quotationTime || new Date(item.createdAt).toTimeString().slice(0, 5),
@@ -486,16 +570,20 @@ export default function OfficialQuotationDetailPage() {
       ...prev,
       createdBy: madeByClean,
       status: "generated",
+      request: nextRequest,
       generatedData,
     }))
 
     const refreshed = getOfficialQuotationById(item.id)
-    if (refreshed) setItem(refreshed)
+    if (refreshed) {
+      setItem(refreshed)
+      setRequestDraft(refreshed.request)
+    }
     setIsEditing(false)
     if (!opts?.silent) alert("Quotation saved!")
   }
 
-  // Proceed to Sales Confirmation
+  // Proceed to Sales order
   const handleProceed = () => {
     if (!item) return
     saveToStorage({ silent: true })
@@ -709,17 +797,29 @@ export default function OfficialQuotationDetailPage() {
     )
   }
 
-  const { event, customer, branding, menu } = item.request
+  const req = requestDraft ?? item.request
+  const scriptReq = item.request
+  const { event, customer, branding, menu } = req
+  const {
+    event: scriptEvent,
+    customer: scriptCustomer,
+    branding: scriptBranding,
+    menu: scriptMenu,
+  } = scriptReq
   const yesNo = (v: boolean) => (v ? "Yes" : "No")
-  const categories = (menu.categories || []).join(", ") || "-"
-  const drinks = (menu.drinks || []).join(", ") || "-"
-  const itemLines = Object.entries(menu.itemQuantities || {})
+  const categories = (scriptMenu.categories || []).join(", ") || "-"
+  const drinks = (scriptMenu.drinks || []).join(", ") || "-"
+  const itemLines = Object.entries(scriptMenu.itemQuantities || {})
     .filter(([, qty]) => typeof qty === "number" && qty > 0)
     .sort(([a], [b]) => a.localeCompare(b))
   
     return (
       <div className="space-y-4">
-        <OrderProgress currentStep="quotation" quotationPath="/portal/quotation/official-quotation" />
+        <OrderProgress
+          currentStep="quotation"
+          quotationPath="/portal/quotation/official-quotation"
+          startFromStep={item?.source === "manual" ? "quotation" : undefined}
+        />
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
         <div className="flex items-center gap-2">
@@ -735,67 +835,78 @@ export default function OfficialQuotationDetailPage() {
       </div>
 
         <fieldset disabled={isLocked} className={isLocked ? "opacity-95" : ""}>
-        <div className="rounded-lg border border-border bg-card p-5 space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-foreground">Request script (from Webpage live)</h2>
-              <p className="text-xs text-muted-foreground">
-                Read-only snapshot of the customer&apos;s submitted request.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-              <div className="text-xs font-semibold text-foreground">Event</div>
-              <div className="grid gap-2 text-sm text-muted-foreground">
-                <div><span className="text-foreground font-medium">Event name:</span> {event.eventName || "-"}</div>
-                <div><span className="text-foreground font-medium">Event date:</span> {event.eventDate || "-"}</div>
-                <div><span className="text-foreground font-medium">Event type:</span> {event.eventType || "-"}</div>
-                <div><span className="text-foreground font-medium">Estimated guests:</span> {event.estimatedGuests || "-"}</div>
-                <div><span className="text-foreground font-medium">Location:</span> {event.eventLocation || "-"}</div>
-                {event.otherAreaName && <div><span className="text-foreground font-medium">Other area:</span> {event.otherAreaName}</div>}
-                {event.otherVenueType && <div><span className="text-foreground font-medium">Venue type:</span> {event.otherVenueType}</div>}
-                <div><span className="text-foreground font-medium">Returning required:</span> {yesNo(!!event.returningRequired)}</div>
+        {item.source === "webpage" && (
+          <div className="rounded-lg border border-border bg-card p-5 space-y-4 print:hidden">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-foreground">Request script (from Webpage live)</h2>
+                <p className="text-xs text-muted-foreground">
+                  Optional reference (read-only). Your editable fields are below.
+                </p>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="bg-transparent"
+                onClick={() => setShowRequestScript((v) => !v)}
+              >
+                {showRequestScript ? "Hide" : "Show"}
+              </Button>
             </div>
 
-            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-              <div className="text-xs font-semibold text-foreground">Customer</div>
-              <div className="grid gap-2 text-sm text-muted-foreground">
-                <div><span className="text-foreground font-medium">Company:</span> {customer.companyName || "-"}</div>
-                <div><span className="text-foreground font-medium">Name:</span> {customer.name || "-"}</div>
-                <div><span className="text-foreground font-medium">Phone:</span> {customer.phone || "-"}</div>
-                <div><span className="text-foreground font-medium">Email:</span> {customer.email || "-"}</div>
-                <div><span className="text-foreground font-medium">Address:</span> {customer.address || "-"}</div>
-                <div><span className="text-foreground font-medium">Notes:</span> {customer.notes || "-"}</div>
-              </div>
-            </div>
+            {showRequestScript && (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                  <div className="text-xs font-semibold text-foreground">Event</div>
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div><span className="text-foreground font-medium">Event name:</span> {scriptEvent.eventName || "-"}</div>
+                    <div><span className="text-foreground font-medium">Event date:</span> {scriptEvent.eventDate || "-"}</div>
+                    <div><span className="text-foreground font-medium">Event type:</span> {scriptEvent.eventType || "-"}</div>
+                    <div><span className="text-foreground font-medium">Estimated guests:</span> {scriptEvent.estimatedGuests || "-"}</div>
+                    <div><span className="text-foreground font-medium">Location:</span> {scriptEvent.eventLocation || "-"}</div>
+                    {scriptEvent.otherAreaName && <div><span className="text-foreground font-medium">Other area:</span> {scriptEvent.otherAreaName}</div>}
+                    {scriptEvent.otherVenueType && <div><span className="text-foreground font-medium">Venue type:</span> {scriptEvent.otherVenueType}</div>}
+                    <div><span className="text-foreground font-medium">Returning required:</span> {yesNo(!!scriptEvent.returningRequired)}</div>
+                  </div>
+                </div>
 
-            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-              <div className="text-xs font-semibold text-foreground">Branding</div>
-              <div className="grid gap-2 text-sm text-muted-foreground">
-                <div><span className="text-foreground font-medium">Include brand logo:</span> {yesNo(!!branding.includeBrandLogo)}</div>
-                <div><span className="text-foreground font-medium">Match brand colours:</span> {yesNo(!!branding.matchBrandColours)}</div>
-                <div><span className="text-foreground font-medium">Logo on dessert:</span> {yesNo(!!branding.logoOnDessert)}</div>
-                <div><span className="text-foreground font-medium">Logo on packaging:</span> {yesNo(!!branding.logoOnPackaging)}</div>
-                <div><span className="text-foreground font-medium">Logo on others:</span> {yesNo(!!branding.logoOnOthers)}{branding.logoOnOthersText ? ` (${branding.logoOnOthersText})` : ""}</div>
-                <div><span className="text-foreground font-medium">Colour on dessert:</span> {yesNo(!!branding.colourOnDessert)}</div>
-                <div><span className="text-foreground font-medium">Colour on packaging:</span> {yesNo(!!branding.colourOnPackaging)}</div>
-                <div><span className="text-foreground font-medium">Colour on others:</span> {yesNo(!!branding.colourOnOthers)}{branding.colourOnOthersText ? ` (${branding.colourOnOthersText})` : ""}</div>
-              </div>
-            </div>
+                <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                  <div className="text-xs font-semibold text-foreground">Customer</div>
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div><span className="text-foreground font-medium">Company:</span> {scriptCustomer.companyName || "-"}</div>
+                    <div><span className="text-foreground font-medium">Name:</span> {scriptCustomer.name || "-"}</div>
+                    <div><span className="text-foreground font-medium">Phone:</span> {scriptCustomer.phone || "-"}</div>
+                    <div><span className="text-foreground font-medium">Email:</span> {scriptCustomer.email || "-"}</div>
+                    <div><span className="text-foreground font-medium">Address:</span> {scriptCustomer.address || "-"}</div>
+                    <div><span className="text-foreground font-medium">Notes:</span> {scriptCustomer.notes || "-"}</div>
+                  </div>
+                </div>
 
-            <div className="rounded-lg border border-border bg-background p-4 space-y-3">
-              <div className="text-xs font-semibold text-foreground">Menu</div>
-              <div className="grid gap-2 text-sm text-muted-foreground">
-                <div><span className="text-foreground font-medium">Customisation level:</span> {menu.customisationLevel || "-"}</div>
-                <div><span className="text-foreground font-medium">Customisation notes:</span> {menu.customisationNotes || "-"}</div>
-                <div><span className="text-foreground font-medium">Dessert size:</span> {menu.dessertSize || "-"}</div>
-                <div><span className="text-foreground font-medium">Packaging:</span> {menu.packaging || "-"}</div>
-                <div><span className="text-foreground font-medium">Categories:</span> {categories}</div>
-                <div><span className="text-foreground font-medium">Drinks:</span> {drinks}{menu.drinksOtherText ? ` (${menu.drinksOtherText})` : ""}</div>
-              </div>
+                <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                  <div className="text-xs font-semibold text-foreground">Branding</div>
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div><span className="text-foreground font-medium">Include brand logo:</span> {yesNo(!!scriptBranding.includeBrandLogo)}</div>
+                    <div><span className="text-foreground font-medium">Match brand colours:</span> {yesNo(!!scriptBranding.matchBrandColours)}</div>
+                    <div><span className="text-foreground font-medium">Logo on dessert:</span> {yesNo(!!scriptBranding.logoOnDessert)}</div>
+                    <div><span className="text-foreground font-medium">Logo on packaging:</span> {yesNo(!!scriptBranding.logoOnPackaging)}</div>
+                    <div><span className="text-foreground font-medium">Logo on others:</span> {yesNo(!!scriptBranding.logoOnOthers)}{scriptBranding.logoOnOthersText ? ` (${scriptBranding.logoOnOthersText})` : ""}</div>
+                    <div><span className="text-foreground font-medium">Colour on dessert:</span> {yesNo(!!scriptBranding.colourOnDessert)}</div>
+                    <div><span className="text-foreground font-medium">Colour on packaging:</span> {yesNo(!!scriptBranding.colourOnPackaging)}</div>
+                    <div><span className="text-foreground font-medium">Colour on others:</span> {yesNo(!!scriptBranding.colourOnOthers)}{scriptBranding.colourOnOthersText ? ` (${scriptBranding.colourOnOthersText})` : ""}</div>
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border bg-background p-4 space-y-3">
+                  <div className="text-xs font-semibold text-foreground">Menu</div>
+                  <div className="grid gap-2 text-sm text-muted-foreground">
+                    <div><span className="text-foreground font-medium">Customisation level:</span> {scriptMenu.customisationLevel || "-"}</div>
+                    <div><span className="text-foreground font-medium">Customisation notes:</span> {scriptMenu.customisationNotes || "-"}</div>
+                    <div><span className="text-foreground font-medium">Dessert size:</span> {scriptMenu.dessertSize || "-"}</div>
+                    <div><span className="text-foreground font-medium">Packaging:</span> {scriptMenu.packaging || "-"}</div>
+                    <div><span className="text-foreground font-medium">Categories:</span> {categories}</div>
+                    <div><span className="text-foreground font-medium">Drinks:</span> {drinks}{scriptMenu.drinksOtherText ? ` (${scriptMenu.drinksOtherText})` : ""}</div>
+                  </div>
 
               {itemLines.length ? (
                 <div className="rounded-md border border-border bg-muted/30 p-3">
@@ -813,7 +924,7 @@ export default function OfficialQuotationDetailPage() {
                 <div className="text-sm text-muted-foreground">No item quantities selected.</div>
               )}
 
-              {menu.referenceImageDataUrl ? (
+              {scriptMenu.referenceImageDataUrl ? (
                 <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
                   <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                     <ImageIcon className="h-4 w-4" />
@@ -821,142 +932,198 @@ export default function OfficialQuotationDetailPage() {
                   </div>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    alt={menu.referenceImageName || "Reference image"}
-                    src={menu.referenceImageDataUrl}
+                    alt={scriptMenu.referenceImageName || "Reference image"}
+                    src={scriptMenu.referenceImageDataUrl}
                     className="max-h-[260px] w-auto rounded-md border border-border bg-background"
                   />
                 </div>
               ) : null}
             </div>
+              </div>
+            )}
+          </div>
+        )}
+      {/* Customer & Event (Editable) */}
+      <div className="grid gap-4 lg:grid-cols-2 print:hidden">
+        <div className="rounded-lg border-2 border-accent/50 bg-card overflow-hidden">
+          <div className="border-b border-accent/30 bg-accent/10 px-6 py-4">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+              <User className="h-5 w-5" />
+              Customer Information
+            </h2>
+          </div>
+          <div className="p-6 grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Company name</Label>
+              <Input
+                value={customerData.companyName}
+                onChange={(e) => setCustomerData((prev) => ({ ...prev, companyName: e.target.value }))}
+                placeholder="Company"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Contact name</Label>
+              <Input
+                value={customerData.customerName}
+                onChange={(e) => setCustomerData((prev) => ({ ...prev, customerName: e.target.value }))}
+                placeholder="Name"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Phone</Label>
+              <Input
+                value={customerData.phone}
+                onChange={(e) => setCustomerData((prev) => ({ ...prev, phone: e.target.value }))}
+                placeholder="Phone"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Email</Label>
+              <Input
+                value={customerData.email}
+                onChange={(e) => setCustomerData((prev) => ({ ...prev, email: e.target.value }))}
+                placeholder="Email"
+              />
+            </div>
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Address (general)</Label>
+              <Input
+                value={customer.address || ""}
+                onChange={(e) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    return { ...base, customer: { ...base.customer, address: e.target.value } }
+                  })
+                }
+                placeholder="Address"
+              />
+            </div>
           </div>
         </div>
-        {/* Quotation Order Information (Editable) */}
+
         <div className="rounded-lg border-2 border-accent/50 bg-card overflow-hidden">
           <div className="border-b border-accent/30 bg-accent/10 px-6 py-4">
             <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
               <FileText className="h-5 w-5" />
-            Quotation Order Information
-          </h2>
-        </div>
-        <div className="p-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs">Quotation Number</Label>
-              <Input value={item.id} readOnly className="font-mono text-xs bg-muted" />
+              Event Details
+            </h2>
+          </div>
+          <div className="p-6 grid gap-3 md:grid-cols-2">
+            <div className="space-y-1.5 md:col-span-2">
+              <Label className="text-xs">Event name</Label>
+              <Input
+                value={event.eventName || ""}
+                onChange={(e) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    return { ...base, event: { ...base.event, eventName: e.target.value } }
+                  })
+                }
+                placeholder="Event name"
+              />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Quotation Date</Label>
+              <Label className="text-xs">Event date</Label>
               <Input
                 type="date"
-                value={quotationDate}
-                onChange={(e) => setQuotationDate(e.target.value)}
-                className="text-xs"
+                value={toISODate(event.eventDate || "")}
+                onChange={(e) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    return { ...base, event: { ...base.event, eventDate: e.target.value } }
+                  })
+                }
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Quotation Time</Label>
+              <Label className="text-xs">Event type</Label>
               <Input
-                type="time"
-                value={quotationTime}
-                onChange={(e) => setQuotationTime(e.target.value)}
-                className="text-xs"
+                value={event.eventType || ""}
+                onChange={(e) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    return { ...base, event: { ...base.event, eventType: e.target.value } }
+                  })
+                }
+                placeholder="Type"
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Made By</Label>
+              <Label className="text-xs">Estimated guests</Label>
               <Input
-                value={madeBy}
-                onChange={(e) => setMadeBy(e.target.value)}
-                placeholder="Your name"
-                className="text-xs"
+                type="number"
+                min={0}
+                value={Number.isFinite(event.estimatedGuests) ? String(event.estimatedGuests) : "0"}
+                onChange={(e) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    const guests = Math.max(0, Number.parseInt(e.target.value || "0", 10) || 0)
+                    return { ...base, event: { ...base.event, estimatedGuests: guests } }
+                  })
+                }
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Location</Label>
+              <Select
+                value={event.eventLocation || "__none__"}
+                onValueChange={(v) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    const next = (v === "__none__" ? "" : v) as typeof base.event.eventLocation
+                    return {
+                      ...base,
+                      event: {
+                        ...base.event,
+                        eventLocation: next,
+                        otherAreaName: next === "others" ? base.event.otherAreaName : "",
+                      },
+                    }
+                  })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select location" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">-</SelectItem>
+                  <SelectItem value="etre-cafe-ipoh">Être Café (Ipoh)</SelectItem>
+                  <SelectItem value="etre-cafe-kl">Être Café (KL)</SelectItem>
+                  <SelectItem value="others">Others</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {event.eventLocation === "others" && (
+              <div className="space-y-1.5 md:col-span-2">
+                <Label className="text-xs">Other area / venue</Label>
+                <Input
+                  value={event.otherAreaName || ""}
+                  onChange={(e) =>
+                    setRequestDraft((prev) => {
+                      const base = prev ?? item.request
+                      return { ...base, event: { ...base.event, otherAreaName: e.target.value } }
+                    })
+                  }
+                  placeholder="Enter area / venue"
+                />
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-background px-3 py-2 md:col-span-2">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-foreground">Returning required</div>
+                <div className="text-xs text-muted-foreground truncate">Does the setup require dismantle / return.</div>
+              </div>
+              <Switch
+                checked={Boolean(event.returningRequired)}
+                onCheckedChange={(v) =>
+                  setRequestDraft((prev) => {
+                    const base = prev ?? item.request
+                    return { ...base, event: { ...base.event, returningRequired: v } }
+                  })
+                }
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Customer Information (Plain display from web form) */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="px-6 py-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-foreground">
-            <User className="h-4 w-4" />
-            Customer Information
-            <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage form)</span>
-          </h2>
-        </div>
-        <div className="px-6 pb-4">
-          <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2 lg:grid-cols-3">
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Company:</dt>
-              <dd className="font-medium">{customer.companyName || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Contact:</dt>
-              <dd className="font-medium">{customer.name || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Phone:</dt>
-              <dd className="font-medium">{customer.phone || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Email:</dt>
-              <dd className="font-medium">{customer.email || "-"}</dd>
-            </div>
-            <div className="flex gap-2 md:col-span-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Address:</dt>
-              <dd className="font-medium">{customer.address || "-"}</dd>
-            </div>
-          </dl>
-        </div>
-      </div>
-
-      {/* Event Details (Plain display from web form) */}
-      <div className="rounded-lg border border-border bg-card overflow-hidden">
-        <div className="border-b border-border bg-secondary/30 px-6 py-3">
-          <h2 className="text-sm font-semibold text-foreground">
-            Event Details
-            <span className="ml-2 text-xs font-normal text-muted-foreground">(from webpage form)</span>
-          </h2>
-        </div>
-        <div className="p-4">
-          <dl className="grid gap-x-6 gap-y-2 text-sm md:grid-cols-2 lg:grid-cols-4">
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Event:</dt>
-              <dd className="font-medium">{event.eventName || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Date:</dt>
-              <dd className="font-medium">{event.eventDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Type:</dt>
-              <dd className="font-medium">{event.eventType || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Guests:</dt>
-              <dd className="font-medium">{event.estimatedGuests || 0}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Delivery:</dt>
-              <dd className="font-medium">{event.takeOutSetupDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Returning:</dt>
-              <dd className="font-medium">{event.takeOutDismantleDate || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Returning required:</dt>
-              <dd className="font-medium">{event.returningRequired ? "Yes" : "No"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Budget/pax:</dt>
-              <dd className="font-medium">RM{event.budgetPerPersonFromRm || "-"} - {event.budgetPerPersonToRm || "-"}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="text-muted-foreground whitespace-nowrap">Location:</dt>
-              <dd className="font-medium">{event.eventLocation || "-"}</dd>
-            </div>
-          </dl>
         </div>
       </div>
 
@@ -1370,10 +1537,46 @@ export default function OfficialQuotationDetailPage() {
         </div>
       </div>
 
+      {/* Quotation Order Information (Editable) */}
+      <div className="rounded-lg border-2 border-accent/50 bg-card overflow-hidden print:hidden">
+        <div className="border-b border-accent/30 bg-accent/10 px-6 py-4">
+          <h2 className="flex items-center gap-2 text-lg font-semibold text-foreground">
+            <FileText className="h-5 w-5" />
+            Quotation Order Information
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Quotation Number</Label>
+              <Input value={item.id} readOnly className="font-mono text-xs bg-muted" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Quotation Date</Label>
+              <Input type="date" value={quotationDate} onChange={(e) => setQuotationDate(e.target.value)} className="text-xs" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Quotation Time</Label>
+              <Input type="time" value={quotationTime} onChange={(e) => setQuotationTime(e.target.value)} className="text-xs" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Made By</Label>
+              <Input value={madeBy} onChange={(e) => setMadeBy(e.target.value)} placeholder="Your name" className="text-xs" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       </fieldset>
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-3 justify-end print:hidden">
+        {item.source === "manual" && !isLocked && (
+          <Button variant="outline" onClick={demoFillManual} className="gap-2">
+            <Dices className="h-4 w-4" />
+            Demo Fill
+          </Button>
+        )}
         <Button variant="outline" onClick={() => setQuotationPreviewOpen(true)} className="gap-2">
           <FileText className="h-4 w-4" />
           Generate Quotation
@@ -1399,7 +1602,7 @@ export default function OfficialQuotationDetailPage() {
         )}
         <Button onClick={handleProceed} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
           <FileText className="h-4 w-4" />
-          Proceed to Sales Confirmation
+          Proceed to Sales order
         </Button>
       </div>
 

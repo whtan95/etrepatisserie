@@ -527,7 +527,7 @@ export default function DismantlePage() {
           ? "Order sent back to Procurement!"
           : target === "packing"
             ? "Order sent back to Planning!"
-            : "Order sent back to Sales Confirmation!",
+            : "Order sent back to Sales order!",
       { title: "Sent Back" }
     )
   }
@@ -1780,7 +1780,7 @@ export default function DismantlePage() {
               </Button>
               <Button type="button" variant="outline" className="gap-2 bg-transparent" onClick={() => sendBackTo("scheduling")}>
                 <Undo2 className="h-4 w-4" />
-                Back to Sales Confirmation
+                Back to Sales order
               </Button>
             </div>
             <div className="pt-2">

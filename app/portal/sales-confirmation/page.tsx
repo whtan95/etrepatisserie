@@ -10,19 +10,11 @@ import { Switch } from "@/components/ui/switch"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, CheckCircle, Search } from "lucide-react"
-import type { SalesOrder } from "@/lib/types"
+import type { PaymentInfo, SalesOrder } from "@/lib/types"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
-
-function generateSalesOrderNumber() {
-  const prefix = "SO"
-  const date = new Date()
-  const year = date.getFullYear().toString().slice(-2)
-  const month = (date.getMonth() + 1).toString().padStart(2, "0")
-  const random = Math.random().toString(36).substring(2, 6).toUpperCase()
-  return `${prefix}${year}${month}-${random}`
-}
 
 function formatDate(dateString: string) {
   if (!dateString) return "-"
@@ -39,8 +31,14 @@ export default function SalesConfirmationPage() {
   const [search, setSearch] = useState("")
   const [selectedOrderNumber, setSelectedOrderNumber] = useState<string>("")
   const [salesOrderNumber, setSalesOrderNumber] = useState("")
+  const [approvedBy, setApprovedBy] = useState("")
+  const [approvedDate, setApprovedDate] = useState("")
+  const [approvedTime, setApprovedTime] = useState("")
+  const [paymentStatus, setPaymentStatus] = useState<NonNullable<PaymentInfo["status"]>>("not_paid")
   const [depositAmount, setDepositAmount] = useState("")
   const [depositReceived, setDepositReceived] = useState(false)
+  const [fullPaymentReceived, setFullPaymentReceived] = useState(false)
+  const [fullPaymentProof, setFullPaymentProof] = useState<PaymentInfo["fullPaymentProof"] | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [ccRows, setCcRows] = useState<Array<{ department: string; name: string; email: string }>>([
@@ -72,20 +70,50 @@ export default function SalesConfirmationPage() {
   useEffect(() => {
     if (!selectedOrder) {
       setSalesOrderNumber("")
+      setApprovedBy("")
+      setApprovedDate("")
+      setApprovedTime("")
       setDepositAmount("")
       setDepositReceived(false)
       return
     }
-    setSalesOrderNumber(selectedOrder.orderMeta?.salesOrderNumber || generateSalesOrderNumber())
+    const now = new Date()
+    setSalesOrderNumber(selectedOrder.orderMeta?.salesOrderNumber || "")
+    setApprovedBy(selectedOrder.orderMeta?.salesApprovedBy || "")
+    setApprovedDate(selectedOrder.orderMeta?.salesApprovedDate || now.toISOString().slice(0, 10))
+    setApprovedTime(selectedOrder.orderMeta?.salesApprovedTime || now.toTimeString().slice(0, 5))
   }, [selectedOrder])
 
   useEffect(() => {
     if (!selectedOrder) return
     const pi = selectedOrder.paymentInfo
+    const nextStatus: NonNullable<PaymentInfo["status"]> =
+      pi?.status ?? (pi?.finalPaymentReceivedAt ? "full" : (pi?.depositAmount ?? 0) > 0 ? "deposit" : "not_paid")
+    setPaymentStatus(nextStatus)
     const dep = typeof pi?.depositAmount === "number" && Number.isFinite(pi.depositAmount) ? pi.depositAmount : 0
     setDepositAmount(dep > 0 ? dep.toFixed(2) : "")
     setDepositReceived(Boolean(pi?.depositReceivedAt))
+    setFullPaymentReceived(Boolean(pi?.finalPaymentReceivedAt))
+    setFullPaymentProof(pi?.fullPaymentProof ?? null)
   }, [selectedOrderNumber])
+
+  useEffect(() => {
+    if (paymentStatus === "not_paid") {
+      setDepositAmount("")
+      setDepositReceived(false)
+      setFullPaymentReceived(false)
+      setFullPaymentProof(null)
+    }
+    if (paymentStatus === "deposit") {
+      setFullPaymentReceived(false)
+      setFullPaymentProof(null)
+    }
+    if (paymentStatus === "full") {
+      setDepositAmount("")
+      setDepositReceived(false)
+      setFullPaymentReceived(true)
+    }
+  }, [paymentStatus])
 
   useEffect(() => {
     if (!selectedOrder) return
@@ -117,6 +145,10 @@ export default function SalesConfirmationPage() {
       showAlert("Please enter a Sales Order Number.", { title: "Missing Sales Order Number", actionText: "OK" })
       return
     }
+    if (!approvedBy.trim() || !approvedDate.trim() || !approvedTime.trim()) {
+      showAlert("Please fill in Approved by, Date, and Time.", { title: "Missing approval info", actionText: "OK" })
+      return
+    }
     setConfirmOpen(true)
   }
 
@@ -131,19 +163,52 @@ export default function SalesConfirmationPage() {
       }))
       .filter((r) => r.department || r.name || r.email)
 
+    const nowIso = new Date().toISOString()
+    const existingPaymentInfo = selectedOrder.paymentInfo
     const depositRaw = Number.parseFloat(depositAmount || "")
     const depositValue = Number.isFinite(depositRaw) ? Math.max(0, depositRaw) : 0
-    const existingPaymentInfo = selectedOrder.paymentInfo
-    const nextPaymentInfo =
-      depositValue > 0
-        ? {
-            ...(existingPaymentInfo ?? { depositAmount: depositValue }),
-            depositAmount: depositValue,
-            depositReceivedAt: depositReceived ? (existingPaymentInfo?.depositReceivedAt ?? new Date().toISOString()) : undefined,
-          }
-        : existingPaymentInfo?.finalPaymentReceivedAt
-          ? { ...existingPaymentInfo, depositAmount: 0, depositReceivedAt: undefined }
-          : undefined
+
+    if (paymentStatus === "deposit" && depositValue <= 0) {
+      showAlert("Please enter a deposit amount (RM).", { title: "Missing deposit", actionText: "OK" })
+      setConfirmOpen(false)
+      return
+    }
+
+    if (paymentStatus === "full" && fullPaymentReceived && !fullPaymentProof?.dataUrl) {
+      showAlert("Please upload full payment proof.", { title: "Missing proof", actionText: "OK" })
+      setConfirmOpen(false)
+      return
+    }
+
+    const nextPaymentInfo: PaymentInfo | undefined =
+      paymentStatus === "not_paid"
+        ? existingPaymentInfo
+          ? {
+              ...existingPaymentInfo,
+              status: "not_paid",
+              depositAmount: 0,
+              depositReceivedAt: undefined,
+              finalPaymentReceivedAt: undefined,
+              fullPaymentProof: undefined,
+            }
+          : { status: "not_paid", depositAmount: 0 }
+        : paymentStatus === "deposit"
+          ? {
+              ...(existingPaymentInfo ?? { depositAmount: depositValue }),
+              status: "deposit",
+              depositAmount: depositValue,
+              depositReceivedAt: depositReceived ? (existingPaymentInfo?.depositReceivedAt ?? nowIso) : undefined,
+              finalPaymentReceivedAt: undefined,
+              fullPaymentProof: undefined,
+            }
+          : {
+              ...(existingPaymentInfo ?? { depositAmount: 0 }),
+              status: "full",
+              depositAmount: 0,
+              depositReceivedAt: undefined,
+              finalPaymentReceivedAt: fullPaymentReceived ? (existingPaymentInfo?.finalPaymentReceivedAt ?? nowIso) : undefined,
+              fullPaymentProof: fullPaymentProof ?? undefined,
+            }
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
       ...order,
@@ -151,6 +216,9 @@ export default function SalesConfirmationPage() {
       orderMeta: {
         ...order.orderMeta,
         salesOrderNumber: salesOrderNumber.trim(),
+        salesApprovedBy: approvedBy.trim(),
+        salesApprovedDate: approvedDate.trim(),
+        salesApprovedTime: approvedTime.trim(),
         salesConfirmationCc: ccClean.length ? ccClean : undefined,
       },
       paymentInfo: nextPaymentInfo,
@@ -159,7 +227,7 @@ export default function SalesConfirmationPage() {
 
     load()
     setConfirmOpen(false)
-    showAlert("Confirmed. Sent to Planning.", { title: "Sales Confirmed", actionText: "OK" })
+    showAlert("Confirmed as sales order. Sent to Planning.", { title: "Sales order confirmed", actionText: "OK" })
     router.push("/portal/planning")
   }
 
@@ -178,7 +246,7 @@ export default function SalesConfirmationPage() {
       <AlertDialog {...alertState} onClose={closeAlert} />
       <ConfirmDialog
         open={confirmOpen}
-        title="Confirm quotation?"
+        title="Confirmed as sales order?"
         description="This will attach the Sales Order Number and send the order to Planning. Optional: add CC recipients."
         confirmText="Confirm"
         cancelText="Cancel"
@@ -247,7 +315,7 @@ export default function SalesConfirmationPage() {
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="space-y-1">
-          <h1 className="text-2xl font-semibold text-foreground">Sales Confirmation</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Sales order</h1>
           <p className="text-sm text-muted-foreground">Confirm quotations and send them to Planning.</p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-end">
@@ -324,7 +392,7 @@ export default function SalesConfirmationPage() {
               <div className="flex flex-col gap-1">
                 <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-accent" />
-                  Confirm Quotation
+                  Confirm as sales order
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   Quotation: <span className="font-medium text-foreground">{selectedOrder.orderNumber}</span>
@@ -366,22 +434,57 @@ export default function SalesConfirmationPage() {
 
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
-                    <Label>Deposit (RM)</Label>
-                    <Input
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min="0"
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      placeholder="Leave blank if no deposit"
-                    />
+                    <Label>Payment status</Label>
+                    <Select value={paymentStatus} onValueChange={(v) => setPaymentStatus(v as NonNullable<PaymentInfo["status"]>)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not_paid">Not paid yet</SelectItem>
+                        <SelectItem value="deposit">Deposit</SelectItem>
+                        <SelectItem value="full">Fully paid</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
+
+                  {paymentStatus === "deposit" ? (
+                    <div className="space-y-1">
+                      <Label>Deposit (RM)</Label>
+                      <Input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min="0"
+                        value={depositAmount}
+                        onChange={(e) => setDepositAmount(e.target.value)}
+                        placeholder="e.g. 500.00"
+                      />
+                    </div>
+                  ) : paymentStatus === "full" ? (
+                    <div className="flex items-end justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground">Full payment received</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {selectedOrder.paymentInfo?.finalPaymentReceivedAt
+                            ? new Date(selectedOrder.paymentInfo.finalPaymentReceivedAt).toLocaleString()
+                            : "Not recorded"}
+                        </div>
+                      </div>
+                      <Switch checked={fullPaymentReceived} onCheckedChange={setFullPaymentReceived} />
+                    </div>
+                  ) : (
+                    <div className="flex items-center text-sm text-muted-foreground">No payment recorded yet.</div>
+                  )}
+                </div>
+
+                {paymentStatus === "deposit" && (
                   <div className="flex items-end justify-between gap-3 rounded-md border border-border bg-background px-3 py-2">
                     <div className="min-w-0">
                       <div className="text-sm font-medium text-foreground">Deposit received</div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {selectedOrder.paymentInfo?.depositReceivedAt ? new Date(selectedOrder.paymentInfo.depositReceivedAt).toLocaleString() : "Not received"}
+                        {selectedOrder.paymentInfo?.depositReceivedAt
+                          ? new Date(selectedOrder.paymentInfo.depositReceivedAt).toLocaleString()
+                          : "Not received"}
                       </div>
                     </div>
                     <Switch
@@ -393,16 +496,68 @@ export default function SalesConfirmationPage() {
                       }}
                     />
                   </div>
+                )}
+
+                {paymentStatus === "full" && fullPaymentReceived && (
+                  <div className="grid gap-2 rounded-md border border-border bg-background p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-foreground">Payment proof</div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {fullPaymentProof?.uploadedAt ? `Uploaded: ${new Date(fullPaymentProof.uploadedAt).toLocaleString()}` : "Not uploaded"}
+                        </div>
+                      </div>
+                      {fullPaymentProof?.dataUrl && (
+                        <Button asChild variant="outline" className="bg-transparent">
+                          <a href={fullPaymentProof.dataUrl} target="_blank" rel="noreferrer">
+                            View
+                          </a>
+                        </Button>
+                      )}
+                    </div>
+                    <Input
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        const reader = new FileReader()
+                        reader.onload = () => {
+                          const dataUrl = typeof reader.result === "string" ? reader.result : ""
+                          if (!dataUrl) return
+                          setFullPaymentProof({
+                            fileName: file.name,
+                            dataUrl,
+                            uploadedAt: new Date().toISOString(),
+                          })
+                        }
+                        reader.readAsDataURL(file)
+                      }}
+                    />
+                {fullPaymentProof?.fileName && (
+                  <div className="text-xs text-muted-foreground truncate">File: {fullPaymentProof.fileName}</div>
+                )}
+              </div>
+            )}
+
+                <div className="rounded-lg border border-border bg-muted/30 p-4">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label>Approved by *</Label>
+                      <Input value={approvedBy} onChange={(e) => setApprovedBy(e.target.value)} placeholder="Name" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Date *</Label>
+                      <Input type="date" value={approvedDate} onChange={(e) => setApprovedDate(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Time *</Label>
+                      <Input type="time" value={approvedTime} onChange={(e) => setApprovedTime(e.target.value)} />
+                    </div>
+                  </div>
                 </div>
+
                 <div className="flex flex-wrap gap-2 justify-end">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setSalesOrderNumber(generateSalesOrderNumber())}
-                    className="bg-transparent"
-                  >
-                    Auto-generate
-                  </Button>
                   <Button type="button" onClick={handleConfirm} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
                     <CheckCircle className="h-4 w-4" />
                     Confirm & Send to Planning
