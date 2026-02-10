@@ -28,15 +28,35 @@ interface SalesOrderPreviewProps {
   onEditOrder?: () => void
   onSaveComplete?: () => void
   orderSource?: "sales" | "ad-hoc"
+  embedded?: boolean
+  documentType?: "quotation" | "sales-order"
 }
 
-export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = true, isFormLocked = false, onEditOrder, onSaveComplete, orderSource = "sales" }: SalesOrderPreviewProps) {
+export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = true, isFormLocked = false, onEditOrder, onSaveComplete, orderSource = "sales", embedded = false, documentType = "quotation" }: SalesOrderPreviewProps) {
   const router = useRouter()
   const printRef = useRef<HTMLDivElement>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [isSaved, setIsSaved] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [contentHeight, setContentHeight] = useState<number | "auto">("auto")
+
+  const isSalesOrderDoc = documentType === "sales-order"
+  const docTitle =
+    orderSource === "ad-hoc"
+      ? isSalesOrderDoc
+        ? "ADHOC ORDER"
+        : "ADHOC QUOTATION"
+      : isSalesOrderDoc
+        ? "SALES ORDER"
+        : "SALES QUOTATION"
+  const docTitlePreview =
+    orderSource === "ad-hoc"
+      ? isSalesOrderDoc
+        ? "Adhoc Order Preview"
+        : "Adhoc Quotation Preview"
+      : isSalesOrderDoc
+        ? "Sales Order Preview"
+        : "Sales Quotation Preview"
 
   const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
   const cleanPart = (s: string) => s.trim().replace(/^[,\s]+|[,\s]+$/g, "").replace(/\s+/g, " ")
@@ -88,7 +108,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
       <!DOCTYPE html>
       <html>
         <head>
-          <title>Quotation - ${salesOrder.orderNumber}</title>
+          <title>${isSalesOrderDoc ? "Sales Order" : "Quotation"} - ${salesOrder.orderNumber}</title>
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #1a1a1a; }
@@ -312,7 +332,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
               <p className="mt-2 text-sm text-muted-foreground">Malaysia</p>
             </div>
             <div className="text-right">
-              <h2 className="text-3xl font-bold text-foreground">{orderSource === "ad-hoc" ? "ADHOC QUOTATION" : "SALES QUOTATION"}</h2>
+              <h2 className="text-3xl font-bold text-foreground">{docTitle}</h2>
               <p className="mt-1 text-lg font-medium text-foreground">{salesOrder.orderNumber}</p>
             </div>
           </div>
@@ -346,7 +366,7 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
               </h3>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Quotation Date:</span>
+                  <span className="text-muted-foreground">{isSalesOrderDoc ? "Sales Order Date:" : "Quotation Date:"}</span>
                   <span className="font-medium">{formatDate(salesOrder.salesOrderDate)}</span>
                 </div>
                 <div className="flex justify-between">
@@ -543,76 +563,78 @@ export function SalesOrderPreview({ salesOrder, isEditMode = false, showSave = t
       </div>
 
       {/* Action Buttons - Moved Below */}
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-        <h2 className="text-lg font-semibold text-foreground">{orderSource === "ad-hoc" ? "Adhoc Quotation Preview" : "Sales Quotation Preview"}</h2>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            className="gap-2 bg-transparent"
-          >
-            {isCollapsed ? (
+      {!embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
+          <h2 className="text-lg font-semibold text-foreground">{docTitlePreview}</h2>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              className="gap-2 bg-transparent"
+            >
+              {isCollapsed ? (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  Show
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Hide
+                </>
+              )}
+            </Button>
+            <Button variant="outline" onClick={handlePrint} className="gap-2 bg-transparent">
+              <Printer className="h-4 w-4" />
+              Print
+            </Button>
+            <Button variant="outline" onClick={handleExportPDF} className="gap-2 bg-transparent">
+              <Download className="h-4 w-4" />
+              Export PDF
+            </Button>
+            {showSave && (
               <>
-                <ChevronDown className="h-4 w-4" />
-                Show
-              </>
-            ) : (
-              <>
-                <ChevronUp className="h-4 w-4" />
-                Hide
-              </>
-            )}
-          </Button>
-          <Button variant="outline" onClick={handlePrint} className="gap-2 bg-transparent">
-            <Printer className="h-4 w-4" />
-            Print
-          </Button>
-          <Button variant="outline" onClick={handleExportPDF} className="gap-2 bg-transparent">
-            <Download className="h-4 w-4" />
-            Export PDF
-          </Button>
-          {showSave && (
-            <>
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || isSaved}
-                variant="outline"
-                className="gap-2 bg-transparent"
-              >
-                {isSaved ? (
-                  <>
-                    <CheckCircle className="h-4 w-4" />
-                    Saved
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    {isSaving ? "Saving..." : "Save"}
-                  </>
-                )}
-              </Button>
-              {isFormLocked && isSaved && onEditOrder && (
                 <Button
-                  onClick={onEditOrder}
+                  onClick={handleSave}
+                  disabled={isSaving || isSaved}
                   variant="outline"
                   className="gap-2 bg-transparent"
                 >
-                  <Edit className="h-4 w-4" />
-                  Edit Order
+                  {isSaved ? (
+                    <>
+                      <CheckCircle className="h-4 w-4" />
+                      Saved
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      {isSaving ? "Saving..." : "Save"}
+                    </>
+                  )}
                 </Button>
-              )}
-              <Button
-                onClick={handleProceedToSalesConfirmation}
-                disabled={!isSaved}
-                className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
-              >
-                <ArrowRight className="h-4 w-4" />
-                Proceed to Sales order
-              </Button>
-            </>
-          )}
+                {isFormLocked && isSaved && onEditOrder && (
+                  <Button
+                    onClick={onEditOrder}
+                    variant="outline"
+                    className="gap-2 bg-transparent"
+                  >
+                    <Edit className="h-4 w-4" />
+                    Edit Order
+                  </Button>
+                )}
+                <Button
+                  onClick={handleProceedToSalesConfirmation}
+                  disabled={!isSaved}
+                  className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Proceed to Sales order
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }

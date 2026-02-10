@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, Suspense } from "react"
+import React, { useEffect, useMemo, useState, Suspense } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -105,9 +105,13 @@ export default function PackingPage() {
     return match ? `Team ${match[1].toUpperCase()}` : lorry
   }
 
+  const getDisplayOrderNumber = (order: SalesOrder) => order.orderMeta?.salesOrderNumber || order.orderNumber
+
   const filteredOrders = orders.filter(order => {
+    const displayNo = getDisplayOrderNumber(order)
     const matchesSearch =
       order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      displayNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customerData.customerName.toLowerCase().includes(searchTerm.toLowerCase())
 
     let matchesDate = true
@@ -253,6 +257,21 @@ export default function PackingPage() {
     setMaterialLines((prev) => prev.filter((_, i) => i !== idx))
   }
 
+  const materialRequiredLines = useMemo(() => {
+    const clean = (s: string | undefined) => (s || "").trim()
+    return materialLines.filter((l) => clean(l.item) || clean(l.quantity) || clean(l.picName))
+  }, [materialLines])
+
+  const allMaterialChecked = useMemo(() => {
+    if (materialRequiredLines.length === 0) return true
+    return materialRequiredLines.every((l) => Boolean(l.packingDone))
+  }, [materialRequiredLines])
+
+  const checkedMaterialCount = useMemo(
+    () => materialRequiredLines.filter((l) => Boolean(l.packingDone)).length,
+    [materialRequiredLines],
+  )
+
   const allItemsChecked = selectedOrder?.packingData?.items && 
     selectedOrder.packingData.items.length > 0 &&
     Object.values(checkedItems).filter(Boolean).length === selectedOrder.packingData.items.length
@@ -295,8 +314,8 @@ export default function PackingPage() {
       showAlert("Please enter packing personnel name")
       return
     }
-    if (!allItemsChecked) {
-      showAlert("Please check all items before saving")
+    if (!allItemsChecked || !allMaterialChecked) {
+      showAlert("Please tick all packing checklists before saving (Items to Pack + Material Planning).")
       return
     }
 
@@ -313,6 +332,13 @@ export default function PackingPage() {
         })),
         status: "packed" as const,
       },
+      materialPlanning: order.materialPlanning
+        ? {
+            ...order.materialPlanning,
+            lines: materialLines.map((l) => ({ ...l })),
+            updatedAt: new Date().toISOString(),
+          }
+        : order.materialPlanning,
       updatedAt: new Date().toISOString(),
     }))
 
@@ -330,8 +356,8 @@ export default function PackingPage() {
       showAlert("Please enter packing personnel name")
       return
     }
-    if (!allItemsChecked) {
-      showAlert("Please check all items before proceeding")
+    if (!allItemsChecked || !allMaterialChecked) {
+      showAlert("Please tick all packing checklists before proceeding (Items to Pack + Material Planning).")
       return
     }
     if (!isFormLocked) {
@@ -355,6 +381,13 @@ export default function PackingPage() {
           })),
           status: "packed" as const,
         },
+        materialPlanning: order.materialPlanning
+          ? {
+              ...order.materialPlanning,
+              lines: materialLines.map((l) => ({ ...l })),
+              updatedAt: new Date().toISOString(),
+            }
+          : order.materialPlanning,
         updatedAt: new Date().toISOString(),
       }
 
@@ -450,8 +483,8 @@ export default function PackingPage() {
     <Suspense fallback={null}>
       <ConfirmDialog
         open={showConfirmPacking}
-        title="Confirm planning?"
-        description="Are you sure you want to confirm and save this planning information? You can still proceed later."
+        title="Confirm packing?"
+        description="This will confirm the packing checklist and allow proceeding to Delivery."
         confirmText="Confirm"
         cancelText="Cancel"
         onConfirm={() => {
@@ -580,7 +613,7 @@ export default function PackingPage() {
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-foreground">{order.orderNumber}</p>
+                        <p className="font-medium text-foreground">{getDisplayOrderNumber(order)}</p>
                         <p className="text-sm text-muted-foreground">
                           {order.customerData.customerName}
                         </p>
@@ -606,7 +639,7 @@ export default function PackingPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="text-xl font-bold text-foreground">
-                        {selectedOrder.orderNumber}
+                        {getDisplayOrderNumber(selectedOrder)}
                       </h2>
                       <p className="text-muted-foreground">
                         {selectedOrder.customerData.customerName}
@@ -707,12 +740,11 @@ export default function PackingPage() {
                       <thead className="bg-muted/40">
                         <tr className="text-left">
                           <th className="p-3 w-10">#</th>
+                          <th className="p-3 w-24">Packed</th>
                           <th className="p-3 min-w-[220px]">Category</th>
                           <th className="p-3 min-w-[220px]">Item</th>
                           <th className="p-3 w-28">Qty</th>
                           <th className="p-3 w-40">PIC Name</th>
-                          <th className="p-3 w-44">Purchasing Required</th>
-                          <th className="p-3 w-36">Enough / Inadequate</th>
                           <th className="p-3 w-16"></th>
                         </tr>
                       </thead>
@@ -720,6 +752,25 @@ export default function PackingPage() {
                         {materialLines.map((line, idx) => (
                           <tr key={idx} className="border-t border-border">
                             <td className="p-3 text-muted-foreground">{idx + 1}</td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`mat-pack-${idx}`}
+                                  checked={Boolean(line.packingDone)}
+                                  onCheckedChange={(checked) => {
+                                    const nextChecked = !!checked
+                                    updateMaterialLine(idx, {
+                                      packingDone: nextChecked,
+                                      packingDoneAt: nextChecked ? (line.packingDoneAt || new Date().toISOString()) : "",
+                                    })
+                                  }}
+                                  disabled={isFormLocked}
+                                />
+                                <Label htmlFor={`mat-pack-${idx}`} className="text-xs text-muted-foreground cursor-pointer select-none">
+                                  Done
+                                </Label>
+                              </div>
+                            </td>
                             <td className="p-3">
                               <Input
                                 value={line.category}
@@ -753,37 +804,6 @@ export default function PackingPage() {
                               />
                             </td>
                             <td className="p-3">
-                              <Select
-                                value={line.purchasingRequired ? "yes" : "no"}
-                                onValueChange={(v) => updateMaterialLine(idx, { purchasingRequired: v === "yes" })}
-                                disabled={isFormLocked}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="yes">Yes</SelectItem>
-                                  <SelectItem value="no">No</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="p-3">
-                              <Select
-                                value={line.adequacy}
-                                onValueChange={(v) => updateMaterialLine(idx, { adequacy: v as any })}
-                                disabled={isFormLocked}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="Select" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="unknown">-</SelectItem>
-                                  <SelectItem value="enough">Enough</SelectItem>
-                                  <SelectItem value="inadequate">Inadequate</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="p-3">
                               <Button
                                 type="button"
                                 variant="ghost"
@@ -800,7 +820,7 @@ export default function PackingPage() {
                         ))}
                         {materialLines.length === 0 && (
                           <tr>
-                            <td className="p-6 text-center text-muted-foreground" colSpan={8}>
+                            <td className="p-6 text-center text-muted-foreground" colSpan={7}>
                               No material planning lines.
                             </td>
                           </tr>
@@ -809,9 +829,14 @@ export default function PackingPage() {
                     </table>
                   </div>
 
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    Mark any line as Inadequate to appear in Procurement.
-                  </p>
+                  {materialRequiredLines.length > 0 && (
+                    <div className="mt-3 flex items-center gap-2 text-sm">
+                      <CheckCircle className={`h-4 w-4 ${allMaterialChecked ? "text-green-600" : "text-muted-foreground"}`} />
+                      <span className={allMaterialChecked ? "text-green-600 font-medium" : "text-muted-foreground"}>
+                        {checkedMaterialCount} of {materialRequiredLines.length} material items checked
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Items to Pack Checklist */}
@@ -964,6 +989,7 @@ export default function PackingPage() {
                           </Button>
                            <Button
                            onClick={handleProceedToNextStage}
+                           disabled={!allItemsChecked || !allMaterialChecked}
                             className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                           >
                             <CheckCircle className="h-4 w-4" />
@@ -973,7 +999,7 @@ export default function PackingPage() {
                       ) : (
                         <Button
                         onClick={() => setShowConfirmPacking(true)}
-                        disabled={!allItemsChecked || !packingInfo.personnel}
+                        disabled={!allItemsChecked || !allMaterialChecked || !packingInfo.personnel}
                         className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
                         >
                           <Save className="h-4 w-4" />

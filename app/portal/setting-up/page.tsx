@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, Suspense, useRef } from "react"
+import React, { useEffect, Suspense, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
+import { PhotoAttachmentsEditor } from "@/components/ui/photo-attachments"
 import {
   Select,
   SelectContent,
@@ -25,7 +26,6 @@ import {
   ArrowLeft,
   Undo2,
   CheckCircle,
-  Camera,
   X,
   AlertCircle,
   Play,
@@ -36,7 +36,7 @@ import {
   ArrowDown,
   Trash2,
 } from "lucide-react"
-import type { SalesOrder, IssueData, SetupData, SetupPhase } from "@/lib/types"
+import type { PhotoAttachment, SalesOrder, IssueData, SetupData, SetupPhase } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
@@ -45,7 +45,6 @@ import { getNextStatus } from "@/lib/order-flow"
 export default function SettingUpPage() {
   const router = useRouter()
   const { alertState, showAlert, closeAlert } = useAppAlert()
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Orders state
   const [orders, setOrders] = useState<SalesOrder[]>([])
@@ -62,7 +61,7 @@ export default function SettingUpPage() {
 
   // Setup phase state
   const [setupPhase, setSetupPhase] = useState<SetupPhase>("pending")
-  const [photos, setPhotos] = useState<string[]>([])
+  const [photoProofs, setPhotoProofs] = useState<PhotoAttachment[]>([])
 
   // Modal states
   const [showStartModal, setShowStartModal] = useState(false)
@@ -193,6 +192,7 @@ export default function SettingUpPage() {
       setupStartTime: "",
       setupCompletionTime: "",
       photos: [],
+      photoProofs: [],
       status: "pending",
       phase: "pending",
     }
@@ -206,12 +206,30 @@ export default function SettingUpPage() {
     return { ...order, setupData }
   }
 
+  const normalizePhotoProofs = (order: SalesOrder) => {
+    const existing = order.setupData?.photoProofs
+    if (existing?.length) return existing
+    const legacy = order.setupData?.photos || []
+    const savedAt = order.setupData?.photosSavedAt || order.updatedAt || new Date().toISOString()
+    const date = savedAt.slice(0, 10)
+    const time = new Date(savedAt).toTimeString().slice(0, 5)
+    return legacy.map((dataUrl, idx) => ({
+      id: `${savedAt}-${idx}`,
+      fileName: `legacy-${idx + 1}.jpg`,
+      dataUrl,
+      date,
+      time,
+      description: "Legacy upload",
+      uploadedAt: savedAt,
+    }))
+  }
+
   const handleSelectOrder = (order: SalesOrder) => {
     const normalized = ensureSetupData(order)
     setSelectedOrder(normalized)
     const phase = normalized.setupData?.phase || "pending"
     setSetupPhase(phase)
-    setPhotos(normalized.setupData?.photos || [])
+    setPhotoProofs(normalizePhotoProofs(normalized))
   }
 
   // Start Delivery
@@ -252,27 +270,14 @@ export default function SettingUpPage() {
     showAlert("Delivery started!", { title: "Started" })
   }
 
-  // Photo handling
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files
-    if (!files) return
-
-    Array.from(files).forEach(file => {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        setPhotos(prev => [...prev, reader.result as string])
-      }
-      reader.readAsDataURL(file)
-    })
-  }
-
-  const removePhoto = (idx: number) => {
-    setPhotos(prev => prev.filter((_, i) => i !== idx))
-  }
-
-  const handleSavePhotos = () => {
-    if (!selectedOrder || photos.length === 0) {
-      showAlert("Please upload at least one photo")
+  const submitPhotoProofs = () => {
+    if (!selectedOrder) return
+    if (!photoProofs.length) {
+      showAlert("Please upload at least one image.", { title: "Missing images", actionText: "OK" })
+      return
+    }
+    if (photoProofs.some((p) => !(p.description || "").trim() || !(p.date || "").trim() || !(p.time || "").trim())) {
+      showAlert("Please fill Date, Time, and Description for all images.", { title: "Missing info", actionText: "OK" })
       return
     }
 
@@ -280,7 +285,8 @@ export default function SettingUpPage() {
       ...order,
       setupData: {
         ...order.setupData!,
-        photos,
+        photoProofs: photoProofs.map((p) => ({ ...p })),
+        photos: photoProofs.map((p) => p.dataUrl),
         photosSavedAt: new Date().toISOString(),
         phase: "photos_saved" as SetupPhase,
       },
@@ -288,12 +294,13 @@ export default function SettingUpPage() {
     }))
 
     loadOrders()
-    const updated = getAllOrders().find(o => o.orderNumber === selectedOrder.orderNumber)
+    const updated = getAllOrders().find((o) => o.orderNumber === selectedOrder.orderNumber)
     if (updated) {
       setSelectedOrder(updated)
       setSetupPhase("photos_saved")
+      setPhotoProofs(normalizePhotoProofs(updated))
     }
-    showAlert("Photos saved!", { title: "Saved" })
+    showAlert("Images submitted.", { title: "Submitted", actionText: "OK" })
   }
 
   // End Delivery
@@ -327,6 +334,7 @@ export default function SettingUpPage() {
     if (updated) {
       setSelectedOrder(updated)
       setSetupPhase("completed")
+      setPhotoProofs(normalizePhotoProofs(updated))
     }
     setShowEndModal(false)
     showAlert("Delivery completed!", { title: "Completed" })
@@ -408,7 +416,7 @@ export default function SettingUpPage() {
     loadOrders()
     setSelectedOrder(null)
     setSetupPhase("pending")
-    setPhotos([])
+    setPhotoProofs([])
     setShowSendBackModal(false)
     showAlert(
       target === "packing"
@@ -464,7 +472,7 @@ export default function SettingUpPage() {
     loadOrders()
     setSelectedOrder(null)
     setSetupPhase("pending")
-    setPhotos([])
+    setPhotoProofs([])
     if (nextStatus === "dismantling") {
       showAlert("Delivery completed! Order moved to Returning.", { title: "Updated" })
       router.push("/portal/returning")
@@ -545,55 +553,14 @@ export default function SettingUpPage() {
               </div>
             </div>
 
-            {/* Photo Upload */}
-            <div className="p-4 border border-border rounded-lg">
-              <h4 className="font-medium mb-3 flex items-center gap-2">
-                <Camera className="h-4 w-4" />
-                Photo Proof
-                {setupPhase === "photos_saved" && (
-                  <span className="text-xs text-green-600 bg-green-100 px-2 py-0.5 rounded">Saved</span>
-                )}
-              </h4>
-              <div className="flex flex-wrap gap-3">
-                {photos.map((photo, idx) => (
-                  <div key={idx} className="relative">
-                    <img src={photo} alt={`Delivery ${idx + 1}`} className="h-20 w-20 object-cover rounded-lg border border-border" />
-                    {setupPhase !== "photos_saved" && (
-                      <button
-                        type="button"
-                        onClick={() => removePhoto(idx)}
-                        className="absolute -top-2 -right-2 bg-destructive text-white rounded-full p-1"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {setupPhase !== "photos_saved" && photos.length < 4 && (
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="h-20 w-20 border-2 border-dashed border-border rounded-lg flex items-center justify-center text-muted-foreground hover:border-accent hover:text-accent transition-colors"
-                  >
-                    <Camera className="h-6 w-6" />
-                  </button>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                />
-              </div>
-              {setupPhase === "tracking" && photos.length > 0 && (
-                <Button onClick={handleSavePhotos} className="mt-4 gap-2 bg-green-600 text-white hover:bg-green-700">
-                  <Save className="h-4 w-4" />
-                  Save Images
-                </Button>
-              )}
-            </div>
+            <PhotoAttachmentsEditor
+              title="Delivery Photos"
+              value={photoProofs}
+              onChange={setPhotoProofs}
+              onSubmit={submitPhotoProofs}
+              submitLabel="Submit"
+              disabled={false}
+            />
 
             {/* Complete Delivery Button */}
             <div className="p-4 border-t border-border">
@@ -635,12 +602,20 @@ export default function SettingUpPage() {
             </div>
 
             {/* Photo Gallery */}
-            {photos.length > 0 && (
+            {photoProofs.length > 0 && (
               <div className="p-4 border border-border rounded-lg">
                 <h4 className="font-medium mb-3">Delivery Photos</h4>
-                <div className="flex flex-wrap gap-3">
-                  {photos.map((photo, idx) => (
-                    <img key={idx} src={photo} alt={`Delivery ${idx + 1}`} className="h-24 w-24 object-cover rounded-lg border border-border" />
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {photoProofs.map((p) => (
+                    <div key={p.id} className="rounded-lg border border-border p-3">
+                      <img
+                        src={p.dataUrl || "/placeholder.svg"}
+                        alt={p.fileName}
+                        className="h-32 w-full object-cover rounded-md border border-border"
+                      />
+                      <p className="mt-2 text-xs text-muted-foreground">{p.date} {p.time}</p>
+                      <p className="text-sm text-foreground break-words">{p.description}</p>
+                    </div>
                   ))}
                 </div>
               </div>

@@ -246,6 +246,16 @@ export interface SetupAcceptance {
   lorry: string
 }
 
+export interface PhotoAttachment {
+  id: string
+  fileName: string
+  dataUrl: string
+  date: string
+  time: string
+  description: string
+  uploadedAt: string
+}
+
 export interface JourneyStart {
   personnel: string
   date: string
@@ -261,6 +271,7 @@ export interface SetupData {
   setupStartTime: string
   setupCompletionTime: string
   photos: string[]
+  photoProofs?: PhotoAttachment[]
   status: "pending" | "completed" | "rejected"
   // New GPS tracking fields
   phase?: SetupPhase
@@ -322,10 +333,20 @@ export interface MaterialPlanningLine {
   picName: string
   purchasingRequired: boolean
   adequacy: "enough" | "inadequate" | "unknown"
+  poNumber?: string
   poDate?: string
   supplier?: string
   estimatedArrivalTime?: string
   arrivalDate?: string
+  procurementDone?: boolean
+  procurementDoneAt?: string
+  packingDone?: boolean
+  packingDoneAt?: string
+  poFile?: {
+    fileName: string
+    dataUrl: string
+    uploadedAt: string
+  }
 }
 
 export interface ProcurementData {
@@ -338,6 +359,7 @@ export interface ProcurementData {
 export interface MaterialPlanningData {
   lines: MaterialPlanningLine[]
   updatedAt: string
+  photos?: PhotoAttachment[]
   approvedBy?: string
   approvedDate?: string
   approvedTime?: string

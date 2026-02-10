@@ -3,13 +3,14 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { AlertCircle, Calendar, ClipboardList, Search } from "lucide-react"
+import { AlertCircle, Calendar, ClipboardList, Paperclip, Search } from "lucide-react"
 import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
@@ -127,8 +128,26 @@ export default function ProcurementPage() {
     setPurchasingEdits(purchasingLines.map((l) => ({ ...l })))
   }, [selectedOrderNumber])
 
+  const allProcurementDone = useMemo(() => {
+    if (!purchasingEdits.length) return true
+    return purchasingEdits.every((l) => Boolean(l.procurementDone))
+  }, [purchasingEdits])
+
   const updatePurchasingLine = (lineIndex: number, patch: Partial<PurchasingLine>) => {
     setPurchasingEdits((prev) => prev.map((l) => (l.lineIndex === lineIndex ? { ...l, ...patch } : l)))
+  }
+
+  const attachPoFile = (lineIndex: number, file: File | null | undefined) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const dataUrl = typeof reader.result === "string" ? reader.result : ""
+      if (!dataUrl) return
+      updatePurchasingLine(lineIndex, {
+        poFile: { fileName: file.name, dataUrl, uploadedAt: new Date().toISOString() },
+      })
+    }
+    reader.readAsDataURL(file)
   }
 
   const savePurchasingEdits = (orderNumber: string) => {
@@ -140,10 +159,14 @@ export default function ProcurementPage() {
         return {
           ...l,
           item: edited.item || "",
+          poNumber: edited.poNumber || "",
           poDate: edited.poDate || "",
           supplier: edited.supplier || "",
           estimatedArrivalTime: edited.estimatedArrivalTime || "",
           arrivalDate: edited.arrivalDate || "",
+          procurementDone: Boolean(edited.procurementDone),
+          procurementDoneAt: edited.procurementDone ? (edited.procurementDoneAt || new Date().toISOString()) : "",
+          poFile: edited.poFile,
         }
       })
 
@@ -161,6 +184,10 @@ export default function ProcurementPage() {
 
   const markDone = () => {
     if (!selectedOrder) return
+    if (!allProcurementDone) {
+      showAlert("Please tick all procurement lines as done before proceeding.", { title: "Procurement not completed", actionText: "OK" })
+      return
+    }
     setConfirmOpen(true)
   }
 
@@ -222,6 +249,10 @@ export default function ProcurementPage() {
 
   const confirmDone = () => {
     if (!selectedOrder) return
+    if (!allProcurementDone) {
+      showAlert("Please tick all procurement lines as done before proceeding.", { title: "Procurement not completed", actionText: "OK" })
+      return
+    }
     if (!procurementPersonnel.trim() || !procurementDate.trim() || !procurementTime.trim()) {
       showAlert("Please fill in procurement personnel, date, and time.", { title: "Missing info", actionText: "OK" })
       return
@@ -455,10 +486,13 @@ export default function ProcurementPage() {
                           <th className="p-3 min-w-[360px]">Item</th>
                           <th className="p-3 w-28">Qty</th>
                           <th className="p-3 w-36">PIC</th>
+                          <th className="p-3 w-44">PO no</th>
                           <th className="p-3 w-36">PO date</th>
                           <th className="p-3 w-56">Supplier</th>
                           <th className="p-3 w-40">ETA date</th>
                           <th className="p-3 w-36">Arrival date</th>
+                          <th className="p-3 w-24">PO file</th>
+                          <th className="p-3 w-24">Done</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -481,6 +515,13 @@ export default function ProcurementPage() {
                             </td>
                             <td className="p-3">{l.quantity}</td>
                             <td className="p-3">{l.picName}</td>
+                            <td className="p-3">
+                              <Input
+                                value={l.poNumber || ""}
+                                onChange={(e) => updatePurchasingLine(l.lineIndex, { poNumber: e.target.value })}
+                                placeholder="PO number"
+                              />
+                            </td>
                             <td className="p-3">
                               <Input
                                 type="date"
@@ -509,6 +550,60 @@ export default function ProcurementPage() {
                                 onChange={(e) => updatePurchasingLine(l.lineIndex, { arrivalDate: e.target.value })}
                               />
                             </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  id={`po-file-${l.lineIndex}`}
+                                  accept="application/pdf,image/*"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0]
+                                    attachPoFile(l.lineIndex, file)
+                                    e.currentTarget.value = ""
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="bg-transparent"
+                                  onClick={() => document.getElementById(`po-file-${l.lineIndex}`)?.click()}
+                                  title={l.poFile?.fileName ? `Replace: ${l.poFile.fileName}` : "Attach PO file"}
+                                >
+                                  <Paperclip className="h-4 w-4" />
+                                </Button>
+                                {l.poFile?.dataUrl ? (
+                                  <a
+                                    href={l.poFile.dataUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs text-accent underline underline-offset-2"
+                                    title={l.poFile.fileName}
+                                  >
+                                    View
+                                  </a>
+                                ) : null}
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-2">
+                                <Checkbox
+                                  id={`proc-done-${l.lineIndex}`}
+                                  checked={Boolean(l.procurementDone)}
+                                  onCheckedChange={(checked) => {
+                                    const nextChecked = !!checked
+                                    updatePurchasingLine(l.lineIndex, {
+                                      procurementDone: nextChecked,
+                                      procurementDoneAt: nextChecked ? (l.procurementDoneAt || new Date().toISOString()) : "",
+                                    })
+                                  }}
+                                />
+                                <Label htmlFor={`proc-done-${l.lineIndex}`} className="text-xs text-muted-foreground cursor-pointer select-none">
+                                  Done
+                                </Label>
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -519,7 +614,7 @@ export default function ProcurementPage() {
 
               <div className="grid gap-2">
                 <Label>Procurement Note (optional)</Label>
-                <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for delivery / team..." />
+                <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note for team..." />
               </div>
 
               <div className="rounded-lg border border-border bg-muted/20 p-4">
@@ -540,8 +635,13 @@ export default function ProcurementPage() {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={markDone} className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
-                  Mark Procurement Done → Delivery
+                <Button
+                  onClick={markDone}
+                  className="gap-2 bg-accent text-accent-foreground hover:bg-accent/90"
+                  disabled={!allProcurementDone}
+                  title={!allProcurementDone ? "Tick all lines as done to proceed." : "Proceed to Packing"}
+                >
+                  Mark Procurement Done → Packing
                 </Button>
               </div>
             </div>

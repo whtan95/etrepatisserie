@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { AlertDialog } from "@/components/ui/alert-dialog"
 import { useAppAlert } from "@/components/ui/use-app-alert"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { PhotoAttachmentsEditor } from "@/components/ui/photo-attachments"
 import {
   Select,
   SelectContent,
@@ -15,13 +16,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar, CheckCircle, ClipboardList, Search, Save, Undo2, AlertCircle, Trash2 } from "lucide-react"
-import type { IssueData, MaterialPlanningLine, SalesOrder } from "@/lib/types"
+import { Calendar, CheckCircle, ClipboardList, Search, Save, Undo2, AlertCircle, Trash2, FileText } from "lucide-react"
+import type { IssueData, MaterialPlanningLine, PhotoAttachment, SalesOrder } from "@/lib/types"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { OrderProgress } from "@/components/portal/order-progress"
 import type { InventoryItem } from "@/lib/inventory"
 import { DEFAULT_INVENTORY_ITEMS } from "@/lib/inventory"
 import { getInventoryDbFromLocalStorage, hasInventoryDbInLocalStorage } from "@/lib/inventory-storage"
+import { SalesOrderPreview } from "@/components/portal/sales-order-preview"
+import { FloatingWindow } from "@/components/ui/floating-window"
 
 const PLANNING_CATEGORIES = [
   "Kitchen item (raw ingredients)",
@@ -64,12 +67,15 @@ export default function PlanningPage() {
   const [approvedTime, setApprovedTime] = useState("")
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>(DEFAULT_INVENTORY_ITEMS)
   const [lines, setLines] = useState<MaterialPlanningLine[]>([createEmptyLine()])
+  const [planningPhotos, setPlanningPhotos] = useState<PhotoAttachment[]>([])
   const [isLocked, setIsLocked] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [flagOpen, setFlagOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [flagPersonnel, setFlagPersonnel] = useState("")
   const [flagIssue, setFlagIssue] = useState("")
+  const [soPreviewOpen, setSoPreviewOpen] = useState(false)
+  const [soPopupDefaults, setSoPopupDefaults] = useState<{ pos: { x: number; y: number }; size: { width: number; height: number } } | null>(null)
 
   const load = () => {
     const all = getAllOrders().map((o) => ({ ...o, orderSource: o.orderSource || "sales" }))
@@ -129,7 +135,9 @@ export default function PlanningPage() {
       setApprovedDate("")
       setApprovedTime("")
       setLines([createEmptyLine()])
+      setPlanningPhotos([])
       setIsLocked(false)
+      setSoPreviewOpen(false)
       return
     }
     const mp = selectedOrder.materialPlanning
@@ -142,6 +150,7 @@ export default function PlanningPage() {
         ? selectedOrder.materialPlanning.lines.map((l) => ({ ...l }))
         : [createEmptyLine()],
     )
+    setPlanningPhotos(mp?.photos ? mp.photos.map((p) => ({ ...p })) : [])
     setIsLocked(Boolean(mp?.approvedBy || mp?.confirmedBy))
   }, [selectedOrderNumber])
 
@@ -164,6 +173,36 @@ export default function PlanningPage() {
       .filter((l) => l.category || l.item || l.quantity || l.picName)
   }, [lines])
 
+  const submitPlanningPhotos = () => {
+    if (!selectedOrder) return
+    if (!planningPhotos.length) {
+      showAlert("Please upload at least one image.", { title: "Missing images", actionText: "OK" })
+      return
+    }
+    if (planningPhotos.some((p) => !(p.description || "").trim() || !(p.date || "").trim() || !(p.time || "").trim())) {
+      showAlert("Please fill Date, Time, and Description for all images.", { title: "Missing info", actionText: "OK" })
+      return
+    }
+    updateOrderByNumber(selectedOrder.orderNumber, (order) => {
+      const now = new Date().toISOString()
+      const fallbackLines = order.materialPlanning?.lines?.length
+        ? order.materialPlanning.lines
+        : (normalizedLines.length ? normalizedLines : [createEmptyLine()])
+      return {
+        ...order,
+        materialPlanning: {
+          ...(order.materialPlanning ?? { lines: fallbackLines, updatedAt: now }),
+          lines: fallbackLines,
+          photos: planningPhotos.map((p) => ({ ...p })),
+          updatedAt: now,
+        },
+        updatedAt: now,
+      }
+    })
+    showAlert("Planning images submitted.", { title: "Submitted", actionText: "OK" })
+    load()
+  }
+
   const save = () => {
     if (!selectedOrder) return
     if (!approvedBy.trim()) {
@@ -178,6 +217,7 @@ export default function PlanningPage() {
       ...order,
       materialPlanning: {
         lines: normalizedLines.length ? normalizedLines : [createEmptyLine()],
+        photos: planningPhotos.map((p) => ({ ...p })),
         updatedAt: new Date().toISOString(),
         approvedBy: approvedBy.trim(),
         approvedDate: approvedDate.trim(),
@@ -285,9 +325,30 @@ export default function PlanningPage() {
     showAlert("Order deleted.", { title: "Deleted", actionText: "OK" })
   }
 
+  const openSoPopup = () => {
+    if (!selectedOrder) return
+    const vw = window.innerWidth || 1200
+    const vh = window.innerHeight || 800
+    const width = Math.max(420, Math.min(720, Math.floor(vw * 0.42)))
+    const height = Math.max(360, Math.min(760, Math.floor(vh * 0.78)))
+    const x = Math.max(16, vw - width - 16)
+    const y = 88
+    setSoPopupDefaults({ pos: { x, y }, size: { width, height } })
+    setSoPreviewOpen(true)
+  }
+
   return (
     <div className="p-6 space-y-6">
       <AlertDialog {...alertState} onClose={closeAlert} />
+      <FloatingWindow
+        open={soPreviewOpen && Boolean(selectedOrder)}
+        title={selectedOrder ? `Sales Order: ${getDisplayOrderNumber(selectedOrder)}` : "Sales Order"}
+        onClose={() => setSoPreviewOpen(false)}
+        defaultPosition={soPopupDefaults?.pos}
+        defaultSize={soPopupDefaults?.size}
+      >
+        {selectedOrder ? <SalesOrderPreview salesOrder={selectedOrder} showSave={false} embedded documentType="sales-order" isFormLocked orderSource={selectedOrder.orderSource} /> : null}
+      </FloatingWindow>
       <ConfirmDialog
         open={confirmOpen}
         title="Proceed to next stage?"
@@ -420,6 +481,16 @@ export default function PlanningPage() {
                   <Button
                     variant="outline"
                     className="gap-2 bg-transparent"
+                    onClick={openSoPopup}
+                    disabled={selectedOrder.orderSource === "ad-hoc"}
+                    title={selectedOrder.orderSource === "ad-hoc" ? "Ad hoc orders have no Sales Order document." : "View Sales Order"}
+                  >
+                    <FileText className="h-4 w-4" />
+                    View SO
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2 bg-transparent"
                     onClick={() => router.push(`/portal/sales-confirmation?order=${encodeURIComponent(selectedOrder.orderNumber)}`)}
                   >
                     Return to Sales order
@@ -526,6 +597,15 @@ export default function PlanningPage() {
                   </tbody>
                 </table>
               </div>
+
+              <PhotoAttachmentsEditor
+                title="Planning Images"
+                value={planningPhotos}
+                onChange={setPlanningPhotos}
+                onSubmit={submitPlanningPhotos}
+                submitLabel="Submit"
+                disabled={isLocked}
+              />
 
               <div className="rounded-lg border border-border bg-muted/20 p-4">
                 <div className="grid gap-3 md:grid-cols-3">

@@ -1,6 +1,6 @@
-"use client"
+﻿"use client"
 
-import React, { useState, useEffect, Suspense, useRef, useCallback } from "react"
+import React, { useEffect, Suspense, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -34,22 +34,18 @@ import {
   FileText,
   Download,
   Printer,
-  Play,
-  Square,
-  Navigation,
   Save,
   ArrowLeft,
   ArrowUp,
   ArrowDown,
   Trash2,
 } from "lucide-react"
-import type { SalesOrder, IssueData, DismantleData, DismantlePhase, JourneyStart, GPSPoint, GPSTrackingData } from "@/lib/types"
+import type { SalesOrder, IssueData, DismantleData, DismantlePhase } from "@/lib/types"
 import { LORRIES } from "@/lib/types"
 import { OrderProgress } from "@/components/portal/order-progress"
 import Loading from "./loading"
 import { deleteOrderByNumber, getAllOrders, updateOrderByNumber } from "@/lib/order-storage"
 import { getNextStatus, isPhaseRequired } from "@/lib/order-flow"
-import { useGPSTracking, generateStaticMapUrl, formatTrackingDuration, formatTrackingTime } from "@/hooks/use-gps-tracking"
 import { getLunchWindowFromLocalStorage, overlapsMinutesWindow, parseHHMMToMinutes } from "@/lib/time-window"
 
 export default function DismantlePage() {
@@ -57,14 +53,6 @@ export default function DismantlePage() {
   const searchParams = useSearchParams()
   const { alertState, showAlert, closeAlert } = useAppAlert()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [routeMapFailed, setRouteMapFailed] = useState(false)
-
-  const formatLocationLabel = useCallback((point?: GPSPoint | null) => {
-    if (!point) return "Unknown location"
-    const coords = `${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)}`
-    const address = point.fullAddress || point.streetName
-    return address ? `${address} (${coords})` : coords
-  }, [])
 
   // Orders state
   const [orders, setOrders] = useState<SalesOrder[]>([])
@@ -84,29 +72,11 @@ export default function DismantlePage() {
   const [photos, setPhotos] = useState<string[]>([])
 
   // Modal states
-  const [showStartModal, setShowStartModal] = useState(false)
-  const [showEndModal, setShowEndModal] = useState(false)
   const [showFlagModal, setShowFlagModal] = useState(false)
   const [showSendBackModal, setShowSendBackModal] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [showSetupLog, setShowSetupLog] = useState(false)
-  const [setupLogMapFailed, setSetupLogMapFailed] = useState(false)
 
   // Accept form data
-
-  // Start journey form data
-  const [startData, setStartData] = useState({
-    personnel: "",
-    date: new Date().toISOString().split("T")[0],
-    time: new Date().toTimeString().slice(0, 5),
-    location: null as GPSPoint | null,
-  })
-
-  // End journey form data
-  const [endData, setEndData] = useState({
-    personnel: "",
-    location: null as GPSPoint | null,
-  })
 
   // Flag issue data
   const [flagData, setFlagData] = useState({
@@ -114,36 +84,6 @@ export default function DismantlePage() {
     issue: "",
     date: new Date().toISOString().split("T")[0],
     time: new Date().toTimeString().slice(0, 5),
-  })
-
-  // GPS Tracking
-  const {
-    isTracking,
-    route,
-    currentLocation,
-    error: gpsError,
-    startTracking,
-    resumeTracking,
-    stopTracking,
-    getCurrentLocation,
-    getTrackingData,
-  } = useGPSTracking({
-    onLocationUpdate: (point) => {
-      // Save route updates to order
-      if (selectedOrder) {
-        updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
-          ...order,
-          dismantleData: {
-            ...order.dismantleData!,
-            gpsTracking: {
-              ...order.dismantleData?.gpsTracking,
-              route: [...(order.dismantleData?.gpsTracking?.route || []), point],
-            } as GPSTrackingData,
-          },
-          updatedAt: new Date().toISOString(),
-        }))
-      }
-    },
   })
 
   useEffect(() => {
@@ -271,77 +211,10 @@ export default function DismantlePage() {
     })()
 
     setSelectedOrder(normalized)
-    setShowSetupLog(false)
-    setSetupLogMapFailed(false)
     // Determine phase from order data
     const phase = normalized.dismantleData?.phase || "pending"
     setDismantlePhase(phase)
     setPhotos(normalized.dismantleData?.photos || [])
-  }
-
-  // Start Journey
-  const openStartModal = async () => {
-    setStartData({
-      personnel: selectedOrder?.dismantleData?.acceptance?.personnel || "",
-      date: new Date().toISOString().split("T")[0],
-      time: new Date().toTimeString().slice(0, 5),
-      location: null,
-    })
-    setShowStartModal(true)
-
-    // Get current location
-    const location = await getCurrentLocation()
-    if (location) {
-      setStartData(prev => ({ ...prev, location }))
-    }
-  }
-
-  const handleStartJourney = async () => {
-    if (!selectedOrder || !startData.personnel) {
-      showAlert("Please fill in all required fields")
-      return
-    }
-
-    // Start GPS tracking
-    const startPoint = await startTracking()
-    if (!startPoint) {
-      showAlert("Failed to get GPS location. Please allow location access.")
-      return
-    }
-
-    const journeyStart: JourneyStart = {
-      personnel: startData.personnel,
-      date: startData.date,
-      time: startData.time,
-      startLocation: startPoint,
-    }
-
-    updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
-      ...order,
-      dismantleData: {
-        ...order.dismantleData!,
-        phase: "tracking" as DismantlePhase,
-        journeyStart,
-        gpsTracking: {
-          startLocation: startPoint,
-          endLocation: null,
-          route: [startPoint],
-          startedAt: startPoint.timestamp,
-          endedAt: null,
-        },
-      },
-      updatedAt: new Date().toISOString(),
-    }))
-
-    loadOrders()
-    const updated = getAllOrders().find(o => o.orderNumber === selectedOrder.orderNumber)
-    if (updated) {
-      setSelectedOrder(updated)
-      setDismantlePhase("tracking")
-    }
-    setRouteMapFailed(false)
-    setShowStartModal(false)
-    showAlert("Journey started! GPS tracking is active.", { title: "Tracking" })
   }
 
   // Photo handling
@@ -386,57 +259,6 @@ export default function DismantlePage() {
       setDismantlePhase("photos_saved")
     }
     showAlert("Photos saved!", { title: "Saved" })
-  }
-
-  // End Journey
-  const openEndModal = async () => {
-    setEndData({
-      personnel: selectedOrder?.dismantleData?.journeyStart?.personnel || "",
-      location: null,
-    })
-    setShowEndModal(true)
-
-    // Get current location
-    const location = await getCurrentLocation()
-    if (location) {
-      setEndData(prev => ({ ...prev, location }))
-    }
-  }
-
-  const handleEndJourney = () => {
-    if (!selectedOrder || !endData.personnel) {
-      showAlert("Please fill in all required fields")
-      return
-    }
-
-    // Stop GPS tracking
-    const endPoint = stopTracking()
-    const trackingData = getTrackingData()
-
-    updateOrderByNumber(selectedOrder.orderNumber, (order) => ({
-      ...order,
-      dismantleData: {
-        ...order.dismantleData!,
-        dismantleCompletionTime: new Date().toTimeString().slice(0, 5),
-        phase: "completed" as DismantlePhase,
-        gpsTracking: {
-          ...order.dismantleData?.gpsTracking,
-          endLocation: endData.location || endPoint,
-          endedAt: new Date().toISOString(),
-          route: trackingData.route,
-        } as GPSTrackingData,
-      },
-      updatedAt: new Date().toISOString(),
-    }))
-
-    loadOrders()
-    const updated = getAllOrders().find(o => o.orderNumber === selectedOrder.orderNumber)
-    if (updated) {
-      setSelectedOrder(updated)
-      setDismantlePhase("completed")
-    }
-    setShowEndModal(false)
-    showAlert("Journey completed!", { title: "Completed" })
   }
 
   // Flag issue
@@ -486,9 +308,6 @@ export default function DismantlePage() {
 
   const sendBackTo = (target: "setting-up" | "procurement" | "packing" | "scheduling") => {
     if (!selectedOrder) return
-
-    // Ensure timers stop before we clear data / navigate.
-    stopTracking()
 
     updateOrderByNumber(selectedOrder.orderNumber, (order) => {
       const base = {
@@ -601,185 +420,49 @@ export default function DismantlePage() {
     if (!selectedOrder) return null
 
     const acceptance = selectedOrder.dismantleData?.acceptance
-    const journeyStart = selectedOrder.dismantleData?.journeyStart
-    const gpsTracking = selectedOrder.dismantleData?.gpsTracking
-    const displayRoute = isTracking ? route : (gpsTracking?.route || [])
+    const canProceed =
+      dismantlePhase === "photos_saved" ||
+      dismantlePhase === "completed" ||
+      Boolean(selectedOrder.dismantleData?.photosSavedAt)
 
     switch (dismantlePhase) {
       case "pending":
-        return (
-          <div className="p-6 text-center">
-            <Navigation className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-medium text-foreground mb-2">Ready to Start</h3>
-            <p className="text-muted-foreground mb-6">Team is already assigned. Start the journey when leaving.</p>
-            <Button onClick={openStartModal} size="lg" className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-              <Play className="h-5 w-5" />
-              Start Journey
-            </Button>
-          </div>
-        )
-
       case "accepted":
-        return (
-          <div className="p-4 space-y-4">
-            {/* Acceptance Info */}
-            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800 dark:text-green-200">Order Accepted</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Personnel:</span>
-                  <span className="ml-2 font-medium">{acceptance?.personnel}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Lorry:</span>
-                  <span
-                    className="ml-2 font-medium px-2 py-0.5 rounded text-white"
-                    style={{ backgroundColor: getLorryColor(acceptance?.lorry || "") }}
-                  >
-                    {LORRIES.find(l => l.id === acceptance?.lorry)?.name || acceptance?.lorry}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Date:</span>
-                  <span className="ml-2">{formatDate(acceptance?.acceptedDate || "")}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Time:</span>
-                  <span className="ml-2">{acceptance?.acceptedTime}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Start Journey Button */}
-            <div className="text-center py-6">
-              <Button onClick={openStartModal} size="lg" className="gap-2 bg-blue-600 text-white hover:bg-blue-700">
-                <Play className="h-5 w-5" />
-                Start Journey
-              </Button>
-              <p className="text-sm text-muted-foreground mt-2">Click when leaving the hub</p>
-            </div>
-          </div>
-        )
-
       case "tracking":
       case "photos_saved":
         return (
           <div className="space-y-4">
-            {/* Tracking Banner */}
-            <div className="p-4 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse" />
-                <span className="font-medium text-red-800 dark:text-red-200">
-                  {isTracking ? "Tracking Active" : "Tracking Paused"}
-                </span>
-                <span className="text-sm text-red-600 dark:text-red-300">
-                  ({displayRoute.length} points)
-                </span>
-              </div>
-              <div className="flex gap-2">
-                {!isTracking && (
-                  <Button
-                    onClick={async () => {
-                      if (!selectedOrder?.dismantleData?.gpsTracking?.route?.length) {
-                        showAlert("No existing tracking data to resume. Start Journey again.", { title: "Tracking" })
-                        return
-                      }
-                      const point = await resumeTracking(selectedOrder.dismantleData.gpsTracking.route)
-                      if (!point) {
-                        showAlert("Failed to resume tracking. Please allow location access.", { title: "Tracking" })
-                        return
-                      }
-                      setRouteMapFailed(false)
-                      showAlert("Tracking resumed.", { title: "Tracking" })
-                    }}
-                    size="sm"
-                    variant="outline"
-                    className="gap-2 bg-transparent"
-                  >
-                    <Play className="h-4 w-4" />
-                    Continue Tracking
-                  </Button>
-                )}
-                <Button onClick={openEndModal} variant="destructive" size="sm" className="gap-2">
-                  <Square className="h-4 w-4" />
-                  End Journey
-                </Button>
-              </div>
-            </div>
-
-            {/* Journey Start Info */}
-            {journeyStart && (
-              <div className="px-4 py-2 bg-blue-50 dark:bg-blue-900/20 text-sm">
-                <span className="text-blue-800 dark:text-blue-200">
-                  Started at {journeyStart.time} from {formatLocationLabel(journeyStart.startLocation)}
-                </span>
+            {acceptance?.personnel && (
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  <span className="font-medium text-green-800 dark:text-green-200">Order Accepted</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Personnel:</span>
+                    <span className="ml-2 font-medium">{acceptance.personnel}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Lorry:</span>
+                    <span
+                      className="ml-2 font-medium px-2 py-0.5 rounded text-white"
+                      style={{ backgroundColor: getLorryColor(acceptance.lorry || "") }}
+                    >
+                      {LORRIES.find((l) => l.id === acceptance.lorry)?.name || acceptance.lorry}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Date:</span>
+                    <span className="ml-2">{formatDate(acceptance.acceptedDate || "")}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Time:</span>
+                    <span className="ml-2">{acceptance.acceptedTime}</span>
+                  </div>
+                </div>
               </div>
             )}
-
-            {gpsError && (
-              <div className="mx-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-700 dark:text-red-200 text-sm">
-                {gpsError}
-              </div>
-            )}
-
-            {/* Tracking Log & Map */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-              {/* Tracking Log */}
-              <div className="border border-border rounded-lg">
-                <div className="p-3 border-b border-border bg-muted/30">
-                  <h4 className="font-medium">Tracking Log</h4>
-                </div>
-                <div className="max-h-[300px] overflow-y-auto p-2">
-                  {displayRoute.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-4 text-center">No tracking data yet</p>
-                  ) : (
-                    displayRoute.map((point, idx) => (
-                      <div key={idx} className="flex items-start gap-2 p-2 text-sm border-b border-border last:border-0">
-                        <MapPin className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <span className="font-medium">{formatTrackingTime(point.timestamp)}</span>
-                          <span className="mx-2">-</span>
-                          <span className="text-muted-foreground">{formatLocationLabel(point)}</span>
-                          {idx === 0 && <span className="ml-2 text-xs text-green-600">(Started)</span>}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Map */}
-              <div className="border border-border rounded-lg">
-                <div className="p-3 border-b border-border bg-muted/30">
-                  <h4 className="font-medium">Route Map</h4>
-                </div>
-                <div className="p-2">
-                  {displayRoute.length >= 2 && !routeMapFailed ? (
-                    (() => {
-                      const mapUrl = generateStaticMapUrl(displayRoute, 400, 300)
-                      if (!mapUrl) return null
-                      return (
-                        <img
-                          src={mapUrl}
-                          alt="Route map"
-                          className="w-full h-[300px] object-cover rounded"
-                          onError={() => setRouteMapFailed(true)}
-                        />
-                      )
-                    })()
-                  ) : (
-                    <div className="h-[300px] flex items-center justify-center bg-muted/30 rounded">
-                      <p className="text-sm text-muted-foreground">
-                        {routeMapFailed ? "Map preview failed to load" : "Map will appear after 2+ points"}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
 
             {/* Customer Uploaded Photos (from Sales Order) */}
             {!!selectedOrder?.customerData?.photos?.length && (
@@ -840,18 +523,23 @@ export default function DismantlePage() {
                   className="hidden"
                 />
               </div>
-              {dismantlePhase === "tracking" && photos.length > 0 && (
+              {dismantlePhase !== "photos_saved" && photos.length > 0 && (
                 <Button onClick={handleSavePhotos} className="mt-4 gap-2 bg-green-600 text-white hover:bg-green-700">
                   <Save className="h-4 w-4" />
                   Save Images
                 </Button>
               )}
-              {dismantlePhase === "photos_saved" && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Photos saved. Click "End Journey" when back at hub.
-                </p>
-              )}
+              {dismantlePhase === "photos_saved" && <p className="text-sm text-muted-foreground mt-2">Photos saved.</p>}
             </div>
+
+            {canProceed && (
+              <div className="p-4 border-t border-border">
+                <Button onClick={handleDismantleDone} className="w-full gap-2 bg-accent text-accent-foreground hover:bg-accent/90">
+                  <CheckCircle className="h-4 w-4" />
+                  Returning Done - Proceed to Invoice
+                </Button>
+              </div>
+            )}
           </div>
         )
 
@@ -862,28 +550,9 @@ export default function DismantlePage() {
             <div className="p-4 bg-green-50 dark:bg-green-900/20 border-b border-green-200 dark:border-green-800">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                <span className="font-medium text-green-800 dark:text-green-200">Journey Completed</span>
+                <span className="font-medium text-green-800 dark:text-green-200">Returning Completed</span>
               </div>
-              {gpsTracking?.startedAt && gpsTracking?.endedAt && (
-                <div className="mt-2 text-sm text-green-700 dark:text-green-300">
-                  <p>Started: {formatTrackingTime(gpsTracking.startedAt)} at {formatLocationLabel(gpsTracking.startLocation)}</p>
-                  <p>Ended: {formatTrackingTime(gpsTracking.endedAt)} at {formatLocationLabel(gpsTracking.endLocation)}</p>
-                  <p>Duration: {formatTrackingDuration(gpsTracking.startedAt, gpsTracking.endedAt)} | {gpsTracking.route?.length || 0} points</p>
-                </div>
-              )}
             </div>
-
-            {/* Final Map */}
-            {gpsTracking?.route && gpsTracking.route.length >= 2 && (
-              <div className="p-4">
-                <h4 className="font-medium mb-3">Complete Route</h4>
-                <img
-                  src={generateStaticMapUrl(gpsTracking.route, 600, 400)}
-                  alt="Complete route"
-                  className="w-full rounded-lg border border-border"
-                />
-              </div>
-            )}
 
             {/* Photo Gallery */}
             {photos.length > 0 && (
@@ -1077,22 +746,6 @@ export default function DismantlePage() {
                         <MapPin className="h-4 w-4" />
                         {selectedOrder.customerData.deliveryAddress || "N/A"}
                       </p>
-                      <div className="mt-3 flex justify-end">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          className="gap-2 bg-transparent"
-                          onClick={() => {
-                            setSetupLogMapFailed(false)
-                            setShowSetupLog(true)
-                          }}
-                          disabled={!selectedOrder.setupData?.gpsTracking?.route?.length}
-                        >
-                          <FileText className="h-4 w-4" />
-                          See Delivery Log
-                        </Button>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1201,80 +854,6 @@ export default function DismantlePage() {
                   </div>
                 </div>
 
-                {/* Setup Journey (read-only) */}
-                {selectedOrder.setupData?.gpsTracking?.route?.length ? (
-                  <div className="hidden">
-                    <h3 className="font-semibold text-foreground mb-3">Setup Journey (GPS)</h3>
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm text-foreground">
-                      <p>
-                        Started:{" "}
-                        {selectedOrder.setupData.gpsTracking.startedAt
-                          ? formatTrackingTime(selectedOrder.setupData.gpsTracking.startedAt)
-                          : "-"}
-                        {" • "}
-                        Ended:{" "}
-                        {selectedOrder.setupData.gpsTracking.endedAt
-                          ? formatTrackingTime(selectedOrder.setupData.gpsTracking.endedAt)
-                          : "-"}
-                      </p>
-                      {selectedOrder.setupData.gpsTracking.startedAt && selectedOrder.setupData.gpsTracking.endedAt ? (
-                        <p className="text-muted-foreground">
-                          Duration:{" "}
-                          {formatTrackingDuration(
-                            selectedOrder.setupData.gpsTracking.startedAt,
-                            selectedOrder.setupData.gpsTracking.endedAt
-                          )}
-                          {" • "}
-                          {selectedOrder.setupData.gpsTracking.route.length} points
-                        </p>
-                      ) : (
-                        <p className="text-muted-foreground">{selectedOrder.setupData.gpsTracking.route.length} points</p>
-                      )}
-                    </div>
-
-                    {(() => {
-                      if (selectedOrder.setupData.gpsTracking.route.length < 2) return null
-                      const mapUrl = generateStaticMapUrl(selectedOrder.setupData.gpsTracking.route, 600, 240)
-                      if (!mapUrl) return null
-                      return (
-                        <div className="mt-3">
-                          <img
-                            src={mapUrl}
-                            alt="Setup journey route"
-                            className="w-full rounded-lg border border-border object-cover"
-                          />
-                        </div>
-                      )
-                    })()}
-
-                    <div className="mt-3 space-y-2">
-                      {selectedOrder.setupData.gpsTracking.route.map((p, idx) => {
-                        const label =
-                          idx === 0
-                            ? "Start"
-                            : idx === selectedOrder.setupData!.gpsTracking!.route.length - 1
-                              ? "End"
-                              : `Point ${idx + 1}`
-                        const coords = `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`
-                        const address = p.fullAddress || p.streetName
-                        const display = address ? `${address} (${coords})` : coords
-                        return (
-                          <div key={`${p.timestamp}-${idx}`} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm">
-                            <div className="min-w-0">
-                              <p className="font-medium text-foreground">{label}</p>
-                              <p className="text-xs text-muted-foreground">{formatTrackingTime(p.timestamp)}</p>
-                              <p className="text-muted-foreground break-words">{display}</p>
-                            </div>
-                            <div className="text-xs text-muted-foreground whitespace-nowrap">
-                              {p.accuracy ? `±${Math.round(p.accuracy)}m` : ""}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
                 {/* Phase Content */}
                 {renderPhaseContent()}
 
@@ -1337,147 +916,8 @@ export default function DismantlePage() {
         confirmText="Delete"
         cancelText="Cancel"
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteOpen(false)}
+      onCancel={() => setDeleteOpen(false)}
       />
-
-      {/* Start Journey Modal */}
-      {showStartModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowStartModal(false)}>
-          <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <Play className="h-5 w-5 text-blue-500" />
-                Start Journey - {selectedOrder?.orderNumber}
-              </h3>
-              <button onClick={() => setShowStartModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Personnel *</Label>
-                <Input
-                  value={startData.personnel}
-                  onChange={(e) => setStartData(prev => ({ ...prev, personnel: e.target.value }))}
-                  placeholder="Confirm personnel name"
-                />
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Date</Label>
-                  <Input type="date" value={startData.date} disabled className="bg-muted" />
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">Time</Label>
-                  <Input type="time" value={startData.time} disabled className="bg-muted" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Current Location</Label>
-                <div className="p-3 bg-muted rounded-lg">
-                  {startData.location ? (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-green-500" />
-                      <span className="text-sm">{formatLocationLabel(startData.location)}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      <span className="text-sm">Getting location...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {gpsError && (
-                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-red-600 text-sm">
-                  {gpsError}
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" onClick={() => setShowStartModal(false)} className="flex-1 bg-transparent">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleStartJourney}
-                  className="flex-1 gap-2 bg-blue-600 text-white hover:bg-blue-700"
-                  disabled={!startData.personnel}
-                >
-                  <Play className="h-4 w-4" />
-                  Start Tracking
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* End Journey Modal */}
-      {showEndModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowEndModal(false)}>
-          <div className="mx-4 w-full max-w-lg rounded-lg border border-border bg-card p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                <Square className="h-5 w-5 text-red-500" />
-                End Journey - {selectedOrder?.orderNumber}
-              </h3>
-              <button onClick={() => setShowEndModal(false)} className="text-muted-foreground hover:text-foreground">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Personnel *</Label>
-                <Input
-                  value={endData.personnel}
-                  onChange={(e) => setEndData(prev => ({ ...prev, personnel: e.target.value }))}
-                  placeholder="Confirm personnel name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">End Location</Label>
-                <div className="p-3 bg-muted rounded-lg">
-                  {endData.location ? (
-                    <div className="flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-red-500" />
-                      <span className="text-sm">{formatLocationLabel(endData.location)}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                      <span className="text-sm">Getting location...</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-700 dark:text-amber-300 text-sm">
-                Make sure you are back at the hub before ending the journey.
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <Button variant="outline" onClick={() => setShowEndModal(false)} className="flex-1 bg-transparent">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleEndJourney}
-                  className="flex-1 gap-2 bg-red-600 text-white hover:bg-red-700"
-                  disabled={!endData.personnel}
-                >
-                  <Square className="h-4 w-4" />
-                  End Journey
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Flag Issue Modal */}
       {showFlagModal && (
@@ -1550,194 +990,6 @@ export default function DismantlePage() {
         </div>
       )}
 
-      {/* Delivery Log Bottom Sheet (non-blocking) */}
-      {showSetupLog && selectedOrder?.setupData?.gpsTracking?.route?.length ? (
-        <div className="fixed inset-0 z-50" onClick={() => setShowSetupLog(false)}>
-          <div className="absolute inset-0 bg-black/50" />
-          <div
-            className="fixed bottom-0 left-0 right-0 max-h-[85vh] overflow-hidden rounded-t-2xl border border-border bg-card shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-border p-4">
-              <div className="min-w-0">
-                <p className="text-sm text-muted-foreground">Delivery Log</p>
-                <h3 className="truncate text-base font-semibold text-foreground">{selectedOrder.orderNumber}</h3>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-2 bg-transparent"
-                  onClick={() => {
-                    const tracking = selectedOrder.setupData?.gpsTracking
-                    if (!tracking) return
-                    const payload = {
-                      orderNumber: selectedOrder.orderNumber,
-                      customerName: selectedOrder.customerData.customerName,
-                      journeyStart: selectedOrder.setupData?.journeyStart || null,
-                      gpsTracking: tracking,
-                    }
-                    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" })
-                    const url = URL.createObjectURL(blob)
-                    const a = document.createElement("a")
-                    a.href = url
-                    a.download = `${selectedOrder.orderNumber}-setup-log.json`
-                    document.body.appendChild(a)
-                    a.click()
-                    a.remove()
-                    URL.revokeObjectURL(url)
-                  }}
-                >
-                  <Download className="h-4 w-4" />
-                  Export
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-2 bg-transparent"
-                  onClick={() => {
-                    const tracking = selectedOrder.setupData?.gpsTracking
-                    if (!tracking) return
-
-                    const escapeHtml = (s: string) =>
-                      s
-                        .replaceAll("&", "&amp;")
-                        .replaceAll("<", "&lt;")
-                        .replaceAll(">", "&gt;")
-                        .replaceAll("\"", "&quot;")
-                        .replaceAll("'", "&#039;")
-
-                    const rows = tracking.route
-                      .map((p, idx) => {
-                        const coords = `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`
-                        const address = p.fullAddress || p.streetName || ""
-                        const where = address ? `${address} (${coords})` : coords
-                        const label = idx === 0 ? "Start" : idx === tracking.route.length - 1 ? "End" : `Point ${idx + 1}`
-                        const accuracy = p.accuracy ? `±${Math.round(p.accuracy)}m` : ""
-                        return `<tr><td>${escapeHtml(label)}</td><td>${escapeHtml(formatTrackingTime(p.timestamp))}</td><td>${escapeHtml(where)}</td><td>${escapeHtml(accuracy)}</td></tr>`
-                      })
-                      .join("")
-
-                    const started = tracking.startedAt ? formatTrackingTime(tracking.startedAt) : "-"
-                    const ended = tracking.endedAt ? formatTrackingTime(tracking.endedAt) : "-"
-                    const duration =
-                      tracking.startedAt && tracking.endedAt ? formatTrackingDuration(tracking.startedAt, tracking.endedAt) : "-"
-
-                    const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeHtml(selectedOrder.orderNumber)} - Delivery Log</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
-    h1 { margin: 0 0 8px; font-size: 18px; }
-    .meta { margin: 0 0 16px; color: #444; font-size: 12px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid #ddd; padding: 8px; vertical-align: top; }
-    th { background: #f6f6f6; text-align: left; }
-  </style>
-</head>
-<body>
-  <h1>Delivery Log - ${escapeHtml(selectedOrder.orderNumber)}</h1>
-  <div class="meta">
-    Customer: ${escapeHtml(selectedOrder.customerData.customerName)}<br/>
-    Started: ${escapeHtml(started)} • Ended: ${escapeHtml(ended)} • Duration: ${escapeHtml(duration)} • Points: ${tracking.route.length}
-  </div>
-  <table>
-    <thead><tr><th>Label</th><th>Time</th><th>Location</th><th>Accuracy</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-</body>
-</html>`
-
-                    const w = window.open("", "_blank")
-                    if (!w) return
-                    w.document.open()
-                    w.document.write(html)
-                    w.document.close()
-                    w.focus()
-                    w.print()
-                  }}
-                >
-                  <Printer className="h-4 w-4" />
-                  Print
-                </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => setShowSetupLog(false)}>
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-
-            <div className="max-h-[calc(85vh-64px)] overflow-y-auto p-4">
-              {(() => {
-                const tracking = selectedOrder.setupData?.gpsTracking
-                if (!tracking) return null
-
-                const started = tracking.startedAt ? formatTrackingTime(tracking.startedAt) : "-"
-                const ended = tracking.endedAt ? formatTrackingTime(tracking.endedAt) : "-"
-                const duration =
-                  tracking.startedAt && tracking.endedAt ? formatTrackingDuration(tracking.startedAt, tracking.endedAt) : "-"
-
-                return (
-                  <div className="space-y-4">
-                    <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
-                      <p>
-                        Started: <span className="font-medium">{started}</span> • Ended: <span className="font-medium">{ended}</span>
-                      </p>
-                      <p className="text-muted-foreground">
-                        Duration: {duration} • {tracking.route.length} points
-                      </p>
-                    </div>
-
-                    {tracking.route.length >= 2 && !setupLogMapFailed ? (
-                      (() => {
-                        const mapUrl = generateStaticMapUrl(tracking.route, 900, 320)
-                        if (!mapUrl) return null
-                        return (
-                          <img
-                            src={mapUrl}
-                            alt="Setup journey route"
-                            className="w-full rounded-lg border border-border object-cover"
-                            onError={() => setSetupLogMapFailed(true)}
-                          />
-                        )
-                      })()
-                    ) : (
-                      <div className="rounded-lg border border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
-                        {setupLogMapFailed ? "Map preview failed to load" : "Map will appear after 2+ points"}
-                      </div>
-                    )}
-
-                    <div className="space-y-2">
-                      {tracking.route.map((p, idx) => {
-                        const label = idx === 0 ? "Start" : idx === tracking.route.length - 1 ? "End" : `Point ${idx + 1}`
-                        const coords = `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`
-                        const address = p.fullAddress || p.streetName
-                        const display = address ? `${address} (${coords})` : coords
-                        return (
-                          <div
-                            key={`${p.timestamp}-${idx}`}
-                            className="flex items-start justify-between gap-3 rounded-lg border border-border bg-card p-3 text-sm"
-                          >
-                            <div className="min-w-0">
-                              <p className="font-medium text-foreground">{label}</p>
-                              <p className="text-xs text-muted-foreground">{formatTrackingTime(p.timestamp)}</p>
-                              <p className="break-words text-muted-foreground">{display}</p>
-                            </div>
-                            <div className="whitespace-nowrap text-xs text-muted-foreground">{p.accuracy ? `±${Math.round(p.accuracy)}m` : ""}</div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
-          </div>
-        </div>
-      ) : null}
     </Suspense>
     <AlertDialog
       open={alertState.open}

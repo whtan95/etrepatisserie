@@ -111,6 +111,12 @@ export default function InventoryPage() {
     })
   }, [items, search, groupView])
 
+  const categoryOptionsByView = useMemo(() => {
+    if (groupView === "pastry") return Array.from(PASTRY_CATEGORIES)
+    if (groupView === "packaging") return Array.from(PACKAGING_CATEGORIES)
+    return Array.from(CATEGORIES)
+  }, [groupView])
+
   const addItem = () => {
     setItems((prev) => [
       ...prev,
@@ -275,18 +281,25 @@ export default function InventoryPage() {
                     />
                   </td>
                   <td className="p-3">
+                    {(() => {
+                      const normalized = normalizeCategory(it.category)
+                      const hasCurrent = categoryOptionsByView.includes(normalized as any)
+                      const options = hasCurrent ? categoryOptionsByView : [normalized, ...categoryOptionsByView]
+                      return (
                     <Select value={it.category} onValueChange={(v) => updateItem(it.rowId, { category: v })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {CATEGORIES.map((c) => (
+                        {options.map((c) => (
                           <SelectItem key={c} value={c}>
                             {c}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                      )
+                    })()}
                   </td>
                   <td className="p-3">
                     <Input

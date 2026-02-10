@@ -3674,6 +3674,7 @@ function SalesOrderContent() {
             salesOrder={salesOrder}
             isEditMode={isEditMode}
             isFormLocked={!isFormEditable}
+            documentType={officialQuotationId ? "quotation" : "sales-order"}
             onEditOrder={() => setIsFormEditable(true)}
             onSaveComplete={() => {
               setIsFormEditable(false)
@@ -3916,7 +3917,7 @@ function SalesOrderContent() {
       {/* Export Preview */}
       {exportOrder && (
         <div ref={savedSalesOrderRef}>
-          <SalesOrderPreview salesOrder={exportOrder} isEditMode showSave={false} />
+          <SalesOrderPreview salesOrder={exportOrder} isEditMode showSave={false} documentType={officialQuotationId ? "quotation" : "sales-order"} />
         </div>
       )}
 
