@@ -1,0 +1,9 @@
+# Supabase configuration
+# See: https://supabase.com/docs/guides/cli/config
+
+[project]
+id = "adckkcqfrrbvdmgznkuc"
+
+[db]
+port = 54322
+major_version = 15

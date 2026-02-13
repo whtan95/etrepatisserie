@@ -1,6 +1,14 @@
 export type EventLocation = "etre-cafe-kl" | "etre-cafe-ipoh" | "others" | ""
 export type VenueType = "indoor" | "outdoor" | ""
 
+export type EventType =
+  | "internal-corporate"
+  | "client-facing-corporate"
+  | "vip-pr"
+  | "private"
+  | "others"
+  | ""
+
 export type DessertCategory = "savoury" | "viennoiserie" | "tart" | "gateaux"
 export type DessertSize = "normal" | "mini" | ""
 
@@ -10,15 +18,19 @@ export type PackagingOption = "customer-own" | "etre-existing" | "premium" | ""
 
 export type CustomisationLevel = "current" | "partial" | "full" | ""
 
+export type PreferredDesignStyle = "minimal-elegant" | "modern-bold" | "playful" | "luxury-premium" | ""
+export type ColourDirection = "brand-colours-only" | "neutral-soft" | "festive" | "client-specified" | ""
+export type PreferredFlavour = "chocolate" | "fruity" | "nutty" | "floral" | "client-specified" | ""
+
 export interface EventData {
   eventName: string
   eventDate: string
-  eventType: string
+  eventType: EventType
+  otherEventType: string
   estimatedGuests: number
 
   takeOutSetupDate: string
   takeOutDismantleDate: string
-  returningRequired: boolean
 
   budgetPerPersonFromRm: string
   budgetPerPersonToRm: string
@@ -48,8 +60,17 @@ export interface BrandingData {
 export interface MenuSelectionData {
   customisationLevel: CustomisationLevel
   customisationNotes: string
-  referenceImageName: string
-  referenceImageDataUrl: string
+  referenceImage1Name: string
+  referenceImage1DataUrl: string
+  referenceImage2Name: string
+  referenceImage2DataUrl: string
+
+  // Only for Fully customise
+  preferredDesignStyle: PreferredDesignStyle
+  colourDirection: ColourDirection
+  colourDirectionClientSpecifiedText: string
+  preferredFlavour: PreferredFlavour
+  preferredFlavourClientSpecifiedText: string
 
   categories: DessertCategory[]
   itemQuantities: Record<string, number>

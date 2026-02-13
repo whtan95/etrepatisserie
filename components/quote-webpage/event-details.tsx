@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import type { EventData, EventLocation, VenueType } from "@/lib/quote-webpage/quote-types"
+import type { EventData, EventLocation, VenueType, EventType } from "@/lib/quote-webpage/quote-types"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import {
@@ -74,55 +74,57 @@ export function EventDetails({ eventData, setEventData }: EventDetailsProps) {
                     <Info className="h-3 w-3 text-white/80" />
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p className="text-xs">If unsure, choose &quot;Others&quot; and explain in notes.</p>
+                    <p className="text-xs">If unsure, choose &quot;Others&quot; and specify.</p>
                   </TooltipContent>
                 </Tooltip>
               </Label>
               <Select
                 value={eventData.eventType}
-                onValueChange={(value) => setEventData((prev) => ({ ...prev, eventType: value }))}
+                onValueChange={(value) =>
+                  setEventData((prev) => ({
+                    ...prev,
+                    eventType: value as EventType,
+                    otherEventType: value === "others" ? prev.otherEventType : "",
+                  }))
+                }
               >
                 <SelectTrigger className="h-8 border border-border bg-background text-xs transition-colors focus:border-accent">
                   <SelectValue placeholder="Select event type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Private Event" className="text-xs">Private Event</SelectItem>
-                  <SelectItem value="Wedding" className="text-xs">Wedding</SelectItem>
-                  <SelectItem value="Corporate" className="text-xs">Corporate</SelectItem>
-                  <SelectItem value="Festive" className="text-xs">Festive</SelectItem>
-                  <SelectItem value="Take Out" className="text-xs">Take Out</SelectItem>
-                  <SelectItem value="Others" className="text-xs">Others</SelectItem>
+                  <SelectItem value="internal-corporate" className="text-xs">
+                    Internal Corporate Event
+                  </SelectItem>
+                  <SelectItem value="client-facing-corporate" className="text-xs">
+                    Client-facing Corporate Event
+                  </SelectItem>
+                  <SelectItem value="vip-pr" className="text-xs">
+                    VIP / PR Event
+                  </SelectItem>
+                  <SelectItem value="private" className="text-xs">
+                    Private Event
+                  </SelectItem>
+                  <SelectItem value="others" className="text-xs">
+                    Others
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {eventData.eventType === "Take Out" && (
-              <>
-                <div className="space-y-1.5">
-                  <Label htmlFor="takeout-setup" className="text-xs font-semibold text-foreground">
-                    Take Out: Preferred setup date
-                  </Label>
-                  <Input
-                    id="takeout-setup"
-                    type="date"
-                    value={eventData.takeOutSetupDate}
-                    onChange={(e) => setEventData((prev) => ({ ...prev, takeOutSetupDate: e.target.value }))}
-                    className="h-8 border border-border bg-background text-xs transition-colors focus:border-accent"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="takeout-dismantle" className="text-xs font-semibold text-foreground">
-                    Take Out: Preferred dismantle date
-                  </Label>
-                  <Input
-                    id="takeout-dismantle"
-                    type="date"
-                    value={eventData.takeOutDismantleDate}
-                    onChange={(e) => setEventData((prev) => ({ ...prev, takeOutDismantleDate: e.target.value }))}
-                    className="h-8 border border-border bg-background text-xs transition-colors focus:border-accent"
-                  />
-                </div>
-              </>
+            {eventData.eventType === "others" && (
+              <div className="space-y-1.5 md:col-span-2">
+                <Label htmlFor="event-type-other" className="text-xs font-semibold text-foreground">
+                  Others: specify
+                </Label>
+                <Input
+                  id="event-type-other"
+                  type="text"
+                  value={eventData.otherEventType}
+                  onChange={(e) => setEventData((prev) => ({ ...prev, otherEventType: e.target.value }))}
+                  placeholder="Please specify event type"
+                  className="h-8 border border-border bg-background text-xs transition-colors focus:border-accent"
+                />
+              </div>
             )}
 
             <div className="space-y-1.5">

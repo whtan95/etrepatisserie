@@ -13,9 +13,20 @@ interface CustomerFormProps {
   setCustomerData: React.Dispatch<React.SetStateAction<CustomerData>>
   onSubmit: () => void
   isSubmitted: boolean
+  isSubmitting?: boolean
+  submitDisabled?: boolean
+  submitDisabledReason?: string
 }
 
-export function CustomerForm({ customerData, setCustomerData, onSubmit, isSubmitted }: CustomerFormProps) {
+export function CustomerForm({
+  customerData,
+  setCustomerData,
+  onSubmit,
+  isSubmitted,
+  isSubmitting,
+  submitDisabled,
+  submitDisabledReason,
+}: CustomerFormProps) {
   const exportPdf = () => {
     window.print()
   }
@@ -54,10 +65,6 @@ export function CustomerForm({ customerData, setCustomerData, onSubmit, isSubmit
       </div>
 
       <div className="p-4">
-        <p className="mb-4 text-xs text-muted-foreground">
-          Have questions or need more information? Fill in your details below and we will get back to you.
-        </p>
-
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1.5 md:col-span-2">
             <Label htmlFor="company-name" className="text-xs font-semibold text-foreground">
@@ -181,12 +188,29 @@ export function CustomerForm({ customerData, setCustomerData, onSubmit, isSubmit
           <button
             type="button"
             onClick={onSubmit}
-            className="group relative inline-flex items-center gap-2 overflow-hidden rounded-lg bg-foreground px-6 py-3 text-sm font-bold text-background shadow-md transition-all hover:scale-105 hover:shadow-lg"
+            disabled={Boolean(submitDisabled) || isSubmitted || isSubmitting}
+            className={`group relative inline-flex items-center gap-2 overflow-hidden rounded-lg px-6 py-3 text-sm font-bold shadow-md transition-all ${
+              Boolean(submitDisabled) || isSubmitted || isSubmitting
+                ? "cursor-not-allowed bg-muted text-muted-foreground shadow-none"
+                : "bg-foreground text-background hover:scale-105 hover:shadow-lg"
+            }`}
           >
-            {isSubmitted ? <CheckCircle2 className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            <span>{isSubmitted ? "Request Sent" : "Request a Quote"}</span>
+            {isSubmitted ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : isSubmitting ? (
+              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            <span>{isSubmitted ? "Request Sent" : isSubmitting ? "Submitting..." : "Request a Quote"}</span>
           </button>
         </div>
+        {Boolean(submitDisabled) && !isSubmitted && submitDisabledReason && (
+          <p className="mt-2 text-center text-[10px] text-destructive print:hidden">{submitDisabledReason}</p>
+        )}
         <p className="mt-3 text-center text-[10px] text-muted-foreground">
           Submitting this form doesn't confirm a booking. We'll reply within 24–48 hours with a quote.
         </p>

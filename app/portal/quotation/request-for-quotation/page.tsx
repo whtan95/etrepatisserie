@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -10,7 +10,7 @@ import {
   REQUEST_FOR_QUOTATION_UPDATED_EVENT,
   type RequestForQuotation,
 } from "@/lib/request-for-quotation-storage"
-import { Search, Eye, Trash2 } from "lucide-react"
+import { Search, Eye, Trash2, RefreshCw } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { OrderProgress } from "@/components/portal/order-progress"
 
@@ -18,17 +18,62 @@ export default function RequestForQuotationListPage() {
   const [items, setItems] = useState<RequestForQuotation[]>([])
   const [query, setQuery] = useState("")
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  useEffect(() => {
-    const load = () => setItems(getRequestForQuotations())
-    load()
-    window.addEventListener(REQUEST_FOR_QUOTATION_UPDATED_EVENT, load as EventListener)
-    return () => window.removeEventListener(REQUEST_FOR_QUOTATION_UPDATED_EVENT, load as EventListener)
+  const loadFromApi = useCallback(async () => {
+    try {
+      const res = await fetch("/api/quote-request")
+      if (res.ok) {
+        const data = await res.json()
+        return (data.requests ?? []) as RequestForQuotation[]
+      }
+    } catch (err) {
+      console.error("Failed to fetch from API:", err)
+    }
+    return []
   }, [])
 
-  const handleDelete = (id: string) => {
+  const loadAll = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      // 同时从 localStorage 和 API 读取数据
+      const localItems = getRequestForQuotations()
+      const apiItems = await loadFromApi()
+
+      // 合并数据，API 优先（因为客户提交的数据在那里）
+      const merged = new Map<string, RequestForQuotation>()
+      for (const item of localItems) merged.set(item.id, item)
+      for (const item of apiItems) merged.set(item.id, item)
+
+      // 按创建时间倒序排列
+      const all = Array.from(merged.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      )
+      setItems(all)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [loadFromApi])
+
+  useEffect(() => {
+    loadAll()
+    window.addEventListener(REQUEST_FOR_QUOTATION_UPDATED_EVENT, loadAll as EventListener)
+    return () => window.removeEventListener(REQUEST_FOR_QUOTATION_UPDATED_EVENT, loadAll as EventListener)
+  }, [loadAll])
+
+  const handleDelete = async (id: string) => {
+    // 从 localStorage 删除
     deleteRequestForQuotation(id)
+
+    // 从 API 删除
+    try {
+      await fetch(`/api/quote-request?id=${encodeURIComponent(id)}`, { method: "DELETE" })
+    } catch (err) {
+      console.error("Failed to delete from API:", err)
+    }
+
     setDeleteConfirmId(null)
+    loadAll()
   }
 
   const filtered = useMemo(() => {
@@ -53,11 +98,23 @@ export default function RequestForQuotationListPage() {
         onCancel={() => setDeleteConfirmId(null)}
       />
 
-      <div className="flex flex-col gap-1">
-        <h1 className="truncate text-lg font-semibold text-foreground">Request for quotation</h1>
-        <p className="text-sm text-muted-foreground">
-          Requests submitted from the "Webpage live" quotation page.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="truncate text-lg font-semibold text-foreground">Request for quotation</h1>
+          <p className="text-sm text-muted-foreground">
+            Requests submitted from customers via the public quotation page.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => loadAll()}
+          disabled={isLoading}
+          className="shrink-0"
+        >
+          <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       <div className="relative max-w-xl">
