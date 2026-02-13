@@ -21,6 +21,8 @@ import {
   ChevronLeft,
   ChevronDown,
   AlertTriangle,
+  Users,
+  Loader2,
 } from "lucide-react"
 import {
   Select,
@@ -32,6 +34,7 @@ import {
 import type { UserRole } from "@/lib/types"
 import { getCurrentRole, setCurrentRole, getAllowedPagesForRole } from "@/lib/role-storage"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
+import { getCurrentUser, signOut, type AppUser } from "@/lib/auth"
 
 type SidebarLinkItem = {
   title: string
@@ -141,6 +144,11 @@ const sidebarItems: SidebarItem[] = [
     href: "/portal/inventory",
     icon: Boxes,
   },
+  {
+    title: "User Management",
+    href: "/portal/settings/users",
+    icon: Users,
+  },
 ]
 
 const isGroupItem = (item: SidebarItem): item is SidebarGroupItem =>
@@ -162,6 +170,8 @@ export default function PortalLayout({
   const [quotationOpen, setQuotationOpen] = useState(true)
   const [deliveryOpen, setDeliveryOpen] = useState(true)
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false)
+  const [authUser, setAuthUser] = useState<AppUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
   const getBaseHref = (href: string) => href.split("?")[0]
 
@@ -184,6 +194,31 @@ export default function PortalLayout({
     setMounted(true)
   }, [])
 
+  // Check authentication
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const user = await getCurrentUser()
+        if (!user) {
+          router.push("/login?status=unauthorized")
+          return
+        }
+        if (user.status !== "approved") {
+          router.push("/login?status=pending")
+          return
+        }
+        setAuthUser(user)
+      } catch (err) {
+        console.error("Auth check failed:", err)
+        // If auth check fails (e.g., Supabase not configured), allow access
+        setAuthUser(null)
+      } finally {
+        setAuthLoading(false)
+      }
+    }
+    checkAuth()
+  }, [router])
+
   useEffect(() => {
     // Settings removed
   }, [pathname])
@@ -194,18 +229,24 @@ export default function PortalLayout({
     setCurrentRoleState(role)
   }, [])
 
-  // Filter sidebar items based on current role
+  // Filter sidebar items based on current role and auth user
   useEffect(() => {
     const allowedPages = getAllowedPagesForRole(currentRole)
     const filtered = sidebarItems
       .map((item) => {
-        if (!isGroupItem(item)) return allowedPages.includes(getBaseHref(item.href)) ? item : null
+        if (!isGroupItem(item)) {
+          // Hide User Management for non-admins
+          if (item.href === "/portal/settings/users" && authUser?.role !== "admin") {
+            return null
+          }
+          return allowedPages.includes(getBaseHref(item.href)) ? item : null
+        }
         const children = item.children.filter((child) => allowedPages.includes(getBaseHref(child.href)))
         return children.length ? { ...item, children } : null
       })
       .filter(Boolean) as SidebarItem[]
     setFilteredSidebarItems(filtered)
-  }, [currentRole])
+  }, [currentRole, authUser])
 
   useEffect(() => {
     const isDashboardActive = pathname === "/portal/status-tracking" ||
@@ -238,11 +279,16 @@ export default function PortalLayout({
     setLogoutConfirmOpen(true)
   }
 
-  const handleConfirmLogout = () => {
+  const handleConfirmLogout = async () => {
+    try {
+      await signOut()
+    } catch (err) {
+      console.error("Sign out failed:", err)
+    }
     // Clear user role (set to default "User")
     setCurrentRole("User")
-    // Navigate to auth page
-    router.push("/auth")
+    // Navigate to login page
+    router.push("/login")
     setLogoutConfirmOpen(false)
   }
 
@@ -263,8 +309,21 @@ export default function PortalLayout({
     if (pathname.includes("/performance-tracking")) return "Performance Tracking"
     if (pathname.includes("/warnings")) return "Warning & Issues"
     if (pathname.includes("/inventory")) return "Inventory"
+    if (pathname.includes("/settings/users")) return "User Management"
     if (pathname === "/portal") return "Dashboard"
     return ""
+  }
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -453,9 +512,16 @@ export default function PortalLayout({
             </h2>
           </div>
           <div className="flex items-center gap-3">
-            <span className="hidden text-sm text-muted-foreground sm:block">
-              Être Patisserie | Order Management Portal
-            </span>
+            {authUser && (
+              <span className="hidden text-sm text-muted-foreground sm:block">
+                {authUser.displayName || authUser.email}
+                {authUser.role === "admin" && (
+                  <span className="ml-1.5 rounded bg-purple-100 px-1.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+                    Admin
+                  </span>
+                )}
+              </span>
+            )}
             {mounted ? (
               <Select value={currentRole} onValueChange={handleRoleChange}>
                 <SelectTrigger className="w-[140px]">
