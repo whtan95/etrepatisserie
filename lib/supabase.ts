@@ -12,7 +12,13 @@ export function getSupabase(): SupabaseClient {
     throw new Error('Supabase environment variables not configured')
   }
 
-  _supabase = createClient(supabaseUrl, supabaseAnonKey)
+  _supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  })
   return _supabase
 }
 
