@@ -235,9 +235,9 @@ export default function PortalLayout({
     const filtered = sidebarItems
       .map((item) => {
         if (!isGroupItem(item)) {
-          // Hide User Management for non-admins
-          if (item.href === "/portal/settings/users" && authUser?.role !== "admin") {
-            return null
+          // User Management: only show for admin users
+          if (item.href === "/portal/settings/users") {
+            return authUser?.role === "admin" ? item : null
           }
           return allowedPages.includes(getBaseHref(item.href)) ? item : null
         }
