@@ -27,7 +27,7 @@ export default function QuotationWebpageLivePage() {
 
   return (
     <div className="space-y-4">
-      <OrderProgress currentStep="webpage-live" />
+      <OrderProgress currentStep="request-for-quotation" />
 
       <div className="flex flex-col gap-1">
         <h1 className="truncate text-lg font-semibold text-foreground">Webpage live</h1>

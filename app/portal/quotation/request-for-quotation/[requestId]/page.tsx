@@ -161,12 +161,16 @@ export default function RequestForQuotationDetailPage() {
           <div className="grid gap-2 text-sm text-muted-foreground">
             <div><span className="text-foreground font-medium">Event name:</span> {event.eventName || "-"}</div>
             <div><span className="text-foreground font-medium">Event date:</span> {event.eventDate || "-"}</div>
-            <div><span className="text-foreground font-medium">Event type:</span> {event.eventType || "-"}</div>
+            <div><span className="text-foreground font-medium">Event type:</span> {event.eventType || "-"}{event.otherEventType ? ` (${event.otherEventType})` : ""}</div>
             <div><span className="text-foreground font-medium">Estimated guests:</span> {event.estimatedGuests || "-"}</div>
             <div><span className="text-foreground font-medium">Location:</span> {event.eventLocation || "-"}</div>
             {event.otherAreaName && <div><span className="text-foreground font-medium">Other area:</span> {event.otherAreaName}</div>}
             {event.otherVenueType && <div><span className="text-foreground font-medium">Venue type:</span> {event.otherVenueType}</div>}
-            <div><span className="text-foreground font-medium">Returning required:</span> {yesNo(!!event.returningRequired)}</div>
+            {event.takeOutSetupDate && <div><span className="text-foreground font-medium">Setup date:</span> {event.takeOutSetupDate}</div>}
+            {event.takeOutDismantleDate && <div><span className="text-foreground font-medium">Dismantle date:</span> {event.takeOutDismantleDate}</div>}
+            {(event.budgetPerPersonFromRm || event.budgetPerPersonToRm) && (
+              <div><span className="text-foreground font-medium">Budget per person:</span> RM {event.budgetPerPersonFromRm || "?"} - {event.budgetPerPersonToRm || "?"}</div>
+            )}
           </div>
         </div>
 
@@ -210,6 +214,9 @@ export default function RequestForQuotationDetailPage() {
           <div className="grid gap-2 text-sm text-muted-foreground">
             <div><span className="text-foreground font-medium">Customisation level:</span> {menu.customisationLevel || "-"}</div>
             <div><span className="text-foreground font-medium">Customisation notes:</span> {menu.customisationNotes || "-"}</div>
+            {menu.preferredDesignStyle && <div><span className="text-foreground font-medium">Design style:</span> {menu.preferredDesignStyle}</div>}
+            {menu.colourDirection && <div><span className="text-foreground font-medium">Colour direction:</span> {menu.colourDirection}{menu.colourDirectionClientSpecifiedText ? ` (${menu.colourDirectionClientSpecifiedText})` : ""}</div>}
+            {menu.preferredFlavour && <div><span className="text-foreground font-medium">Preferred flavour:</span> {menu.preferredFlavour}{menu.preferredFlavourClientSpecifiedText ? ` (${menu.preferredFlavourClientSpecifiedText})` : ""}</div>}
             <div><span className="text-foreground font-medium">Dessert size:</span> {menu.dessertSize || "-"}</div>
             <div><span className="text-foreground font-medium">Packaging:</span> {menu.packaging || "-"}</div>
             <div><span className="text-foreground font-medium">Categories:</span> {categories}</div>
@@ -231,18 +238,30 @@ export default function RequestForQuotationDetailPage() {
             <div className="text-sm text-muted-foreground">No item quantities selected.</div>
           )}
 
-          {menu.referenceImageDataUrl ? (
+          {(menu.referenceImage1DataUrl || menu.referenceImage2DataUrl) ? (
             <div className="rounded-md border border-border bg-muted/30 p-3 space-y-2">
               <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
                 <ImageIcon className="h-4 w-4" />
-                Reference image
+                Reference images
               </div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                alt={menu.referenceImageName || "Reference image"}
-                src={menu.referenceImageDataUrl}
-                className="max-h-[260px] w-auto rounded-md border border-border bg-background"
-              />
+              <div className="flex flex-wrap gap-2">
+                {menu.referenceImage1DataUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    alt={menu.referenceImage1Name || "Reference image 1"}
+                    src={menu.referenceImage1DataUrl}
+                    className="max-h-[200px] w-auto rounded-md border border-border bg-background"
+                  />
+                )}
+                {menu.referenceImage2DataUrl && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    alt={menu.referenceImage2Name || "Reference image 2"}
+                    src={menu.referenceImage2DataUrl}
+                    className="max-h-[200px] w-auto rounded-md border border-border bg-background"
+                  />
+                )}
+              </div>
             </div>
           ) : null}
         </div>
