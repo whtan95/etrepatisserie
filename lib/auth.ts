@@ -1,7 +1,7 @@
 import { getSupabase } from "./supabase"
 
 export type UserStatus = "pending" | "approved" | "rejected"
-export type UserRole = "admin" | "staff"
+export type UserRole = "admin" | "manager" | "staff"
 
 export interface AppUser {
   id: string
@@ -192,6 +192,24 @@ export async function rejectUser(userId: string): Promise<{ success: boolean; er
   const supabase = getSupabase()
 
   const { error } = await supabase.from("users").update({ status: "rejected" }).eq("id", userId)
+
+  if (error) {
+    return { success: false, error: error.message }
+  }
+
+  return { success: true }
+}
+
+/**
+ * Update a user's role (admin only).
+ */
+export async function updateUserRole(
+  userId: string,
+  newRole: UserRole
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = getSupabase()
+
+  const { error } = await supabase.from("users").update({ role: newRole }).eq("id", userId)
 
   if (error) {
     return { success: false, error: error.message }

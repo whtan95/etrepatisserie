@@ -1,7 +1,7 @@
 // Shared types for the portal
 
 // User roles and access control
-export type UserRole = "Manager" | "Sales" | "Warehouse" | "Traffic" | "Operation" | "User"
+export type UserRole = "admin" | "manager" | "staff"
 
 export interface RoleAccessControl {
   role: UserRole

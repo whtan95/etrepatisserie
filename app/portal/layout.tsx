@@ -32,7 +32,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { UserRole } from "@/lib/types"
-import { getCurrentRole, setCurrentRole, getAllowedPagesForRole } from "@/lib/role-storage"
+import { getCurrentRole, setCurrentRole, getAllowedPagesForRole, getRoleDisplayName, ADMIN_ONLY_PAGES } from "@/lib/role-storage"
+import { Settings } from "lucide-react"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { getCurrentUser, signOut, type AppUser } from "@/lib/auth"
 
@@ -149,6 +150,11 @@ const sidebarItems: SidebarItem[] = [
     href: "/portal/settings/users",
     icon: Users,
   },
+  {
+    title: "Role Settings",
+    href: "/portal/settings/roles",
+    icon: Settings,
+  },
 ]
 
 const isGroupItem = (item: SidebarItem): item is SidebarGroupItem =>
@@ -164,7 +170,7 @@ export default function PortalLayout({
   const [mounted, setMounted] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [currentRole, setCurrentRoleState] = useState<UserRole>("User")
+  const [currentRole, setCurrentRoleState] = useState<UserRole>("staff")
   const [filteredSidebarItems, setFilteredSidebarItems] = useState(sidebarItems)
   const [dashboardOpen, setDashboardOpen] = useState(true)
   const [quotationOpen, setQuotationOpen] = useState(true)
@@ -231,12 +237,16 @@ export default function PortalLayout({
 
   // Filter sidebar items based on current role and auth user
   useEffect(() => {
-    const allowedPages = getAllowedPagesForRole(currentRole)
+    // For admin users simulating other roles, use the simulated role for filtering
+    // But admin-only pages (User Management, Role Settings) are always based on actual auth role
+    const roleForFiltering = authUser?.role === "admin" ? currentRole : (authUser?.role || "staff")
+    const allowedPages = getAllowedPagesForRole(roleForFiltering)
+
     const filtered = sidebarItems
       .map((item) => {
         if (!isGroupItem(item)) {
-          // User Management: only show for admin users
-          if (item.href === "/portal/settings/users") {
+          // Admin-only pages: only show for actual admin users
+          if (ADMIN_ONLY_PAGES.includes(item.href)) {
             return authUser?.role === "admin" ? item : null
           }
           return allowedPages.includes(getBaseHref(item.href)) ? item : null
@@ -285,8 +295,8 @@ export default function PortalLayout({
     } catch (err) {
       console.error("Sign out failed:", err)
     }
-    // Clear user role (set to default "User")
-    setCurrentRole("User")
+    // Clear user role (set to default "staff")
+    setCurrentRole("staff")
     // Navigate to login page
     router.push("/login")
     setLogoutConfirmOpen(false)
@@ -310,6 +320,7 @@ export default function PortalLayout({
     if (pathname.includes("/warnings")) return "Warning & Issues"
     if (pathname.includes("/inventory")) return "Inventory"
     if (pathname.includes("/settings/users")) return "User Management"
+    if (pathname.includes("/settings/roles")) return "Role Settings"
     if (pathname === "/portal") return "Dashboard"
     return ""
   }
@@ -522,23 +533,19 @@ export default function PortalLayout({
                 )}
               </span>
             )}
-            {mounted ? (
+            {/* Role simulator - only visible to admin users */}
+            {mounted && authUser?.role === "admin" ? (
               <Select value={currentRole} onValueChange={handleRoleChange}>
                 <SelectTrigger className="w-[140px]">
-                  <SelectValue />
+                  <SelectValue>{getRoleDisplayName(currentRole)}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Manager">Manager</SelectItem>
-                  <SelectItem value="Sales">Sales</SelectItem>
-                  <SelectItem value="Warehouse">Warehouse</SelectItem>
-                  <SelectItem value="Traffic">Traffic</SelectItem>
-                  <SelectItem value="Operation">Operation</SelectItem>
-                  <SelectItem value="User">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="staff">Staff</SelectItem>
                 </SelectContent>
               </Select>
-            ) : (
-              <div className="h-9 w-[140px] rounded-md border border-border bg-muted/40" />
-            )}
+            ) : null}
           </div>
         </header>
 

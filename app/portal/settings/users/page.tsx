@@ -5,13 +5,22 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   getCurrentUser,
   getAllUsers,
   approveUser,
   rejectUser,
+  updateUserRole,
   type AppUser,
+  type UserRole,
 } from "@/lib/auth"
-import { CheckCircle, XCircle, Clock, Shield, User, RefreshCw } from "lucide-react"
+import { CheckCircle, XCircle, Clock, Shield, User, RefreshCw, Crown } from "lucide-react"
 
 export default function UserManagementPage() {
   const router = useRouter()
@@ -66,6 +75,20 @@ export default function UserManagementPage() {
     }
   }
 
+  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    if (!currentUser || userId === currentUser.id) return
+
+    setIsProcessing(true)
+    try {
+      await updateUserRole(userId, newRole)
+      await loadData()
+    } catch (err) {
+      console.error("Failed to update role:", err)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "approved":
@@ -93,20 +116,29 @@ export default function UserManagementPage() {
   }
 
   const getRoleBadge = (role: string) => {
-    if (role === "admin") {
-      return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
-          <Shield className="h-3 w-3" />
-          Admin
-        </span>
-      )
+    switch (role) {
+      case "admin":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+            <Shield className="h-3 w-3" />
+            Admin
+          </span>
+        )
+      case "manager":
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+            <Crown className="h-3 w-3" />
+            Manager
+          </span>
+        )
+      default:
+        return (
+          <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-800 dark:text-gray-200">
+            <User className="h-3 w-3" />
+            Staff
+          </span>
+        )
     }
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:bg-gray-800 dark:text-gray-200">
-        <User className="h-3 w-3" />
-        Staff
-      </span>
-    )
   }
 
   if (isLoading) {
@@ -126,7 +158,6 @@ export default function UserManagementPage() {
   }
 
   const pendingUsers = users.filter((u) => u.status === "pending")
-  const otherUsers = users.filter((u) => u.status !== "pending")
 
   return (
     <div className="space-y-6">
@@ -252,7 +283,27 @@ export default function UserManagementPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user.email}</td>
-                    <td className="px-4 py-3">{getRoleBadge(user.role)}</td>
+                    <td className="px-4 py-3">
+                      {user.id === currentUser.id ? (
+                        // Can't change your own role
+                        getRoleBadge(user.role)
+                      ) : (
+                        <Select
+                          value={user.role}
+                          onValueChange={(value) => handleRoleChange(user.id, value as UserRole)}
+                          disabled={isProcessing}
+                        >
+                          <SelectTrigger className="h-8 w-[120px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="manager">Manager</SelectItem>
+                            <SelectItem value="staff">Staff</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </td>
                     <td className="px-4 py-3">{getStatusBadge(user.status)}</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString()}
