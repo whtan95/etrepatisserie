@@ -10,6 +10,64 @@ function generateRequestForQuotationId(now = new Date()): string {
   return `RFQ-${yyyy}${mm}${dd}-${rand}`
 }
 
+/**
+ * Convert QuoteRequestData to flat columns for Supabase
+ */
+function flattenRequest(request: QuoteRequestData) {
+  const { event, customer, branding, menu } = request
+  return {
+    // Event
+    event_name: event.eventName || null,
+    event_date: event.eventDate || null,
+    event_type: event.eventType || null,
+    event_type_other: event.otherEventType || null,
+    estimated_guests: event.estimatedGuests || null,
+    event_location: event.eventLocation || null,
+    location_area_name: event.otherAreaName || null,
+    location_venue_type: event.otherVenueType || null,
+    setup_date: event.takeOutSetupDate || null,
+    dismantle_date: event.takeOutDismantleDate || null,
+    budget_from_rm: event.budgetPerPersonFromRm || null,
+    budget_to_rm: event.budgetPerPersonToRm || null,
+    // Customer
+    customer_company: customer.companyName || null,
+    customer_name: customer.name || null,
+    customer_phone: customer.phone || null,
+    customer_email: customer.email || null,
+    customer_address: customer.address || null,
+    customer_notes: customer.notes || null,
+    // Branding
+    branding_include_logo: branding.includeBrandLogo || false,
+    branding_match_colours: branding.matchBrandColours || false,
+    branding_logo_dessert: branding.logoOnDessert || false,
+    branding_logo_packaging: branding.logoOnPackaging || false,
+    branding_logo_others: branding.logoOnOthers || false,
+    branding_logo_others_text: branding.logoOnOthersText || null,
+    branding_colour_dessert: branding.colourOnDessert || false,
+    branding_colour_packaging: branding.colourOnPackaging || false,
+    branding_colour_others: branding.colourOnOthers || false,
+    branding_colour_others_text: branding.colourOnOthersText || null,
+    // Menu
+    menu_customisation_level: menu.customisationLevel || null,
+    menu_customisation_notes: menu.customisationNotes || null,
+    menu_design_style: menu.preferredDesignStyle || null,
+    menu_colour_direction: menu.colourDirection || null,
+    menu_colour_specified: menu.colourDirectionClientSpecifiedText || null,
+    menu_flavour: menu.preferredFlavour || null,
+    menu_flavour_specified: menu.preferredFlavourClientSpecifiedText || null,
+    menu_dessert_size: menu.dessertSize || null,
+    menu_packaging: menu.packaging || null,
+    menu_categories: menu.categories || [],
+    menu_drinks: menu.drinks || [],
+    menu_drinks_other: menu.drinksOtherText || null,
+    menu_item_quantities: menu.itemQuantities || {},
+    menu_reference_image1_name: menu.referenceImage1Name || null,
+    menu_reference_image1_url: menu.referenceImage1DataUrl || null,
+    menu_reference_image2_name: menu.referenceImage2Name || null,
+    menu_reference_image2_url: menu.referenceImage2DataUrl || null,
+  }
+}
+
 // POST - 客户提交报价请求
 export async function POST(req: NextRequest) {
   try {
@@ -23,11 +81,13 @@ export async function POST(req: NextRequest) {
     const now = new Date()
     const id = generateRequestForQuotationId(now)
 
+    // Insert with both JSON (for frontend) and flat columns (for Supabase dashboard)
     const { error } = await supabase.from("quote_requests").insert({
       id,
       created_at: now.toISOString(),
       status: "new",
-      request,
+      request, // Keep JSON for frontend compatibility
+      ...flattenRequest(request), // Spread flat columns
     })
 
     if (error) {
