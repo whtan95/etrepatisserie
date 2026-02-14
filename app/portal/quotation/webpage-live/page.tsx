@@ -1,63 +1,76 @@
-
 "use client"
 
 import { useState } from "react"
-import { ExternalLink } from "lucide-react"
+import { ExternalLink, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
-
-const DEFAULT_LIVE_PAGE_PATH = "/etre-patisserie-quotation-page"
+import { OrderProgress } from "@/components/portal/order-progress"
 
 export default function QuotationWebpageLivePage() {
-  const baseSrc = process.env.NEXT_PUBLIC_QUOTATION_WEBPAGE_LIVE_URL || DEFAULT_LIVE_PAGE_PATH
-  const [src, setSrc] = useState(baseSrc)
+  const [copied, setCopied] = useState(false)
 
-  const getDemoSrc = () => {
-    if (baseSrc.startsWith("http")) {
-      const u = new URL(baseSrc)
-      u.searchParams.set("demo", "1")
-      u.searchParams.set("demoAt", Date.now().toString())
-      return u.toString()
+  // Build the full URL for the quote page
+  const getFullUrl = () => {
+    if (typeof window === "undefined") return "/quote"
+    return `${window.location.origin}/quote`
+  }
+
+  const handleCopy = async () => {
+    const url = getFullUrl()
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error("Failed to copy:", err)
     }
-    return `${baseSrc}?demo=1&demoAt=${Date.now()}`
   }
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-foreground">Webpage live</h3>
-          <p className="truncate text-sm text-muted-foreground">
-            Previewing: <span className="font-mono text-xs">{src}</span>
+    <div className="space-y-4">
+      <OrderProgress currentStep="webpage-live" />
+
+      <div className="flex flex-col gap-1">
+        <h1 className="truncate text-lg font-semibold text-foreground">Webpage live</h1>
+        <p className="text-sm text-muted-foreground">
+          Share this link with customers to request a quotation.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-6 space-y-4">
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-foreground">Customer Quote Page</h2>
+          <p className="text-sm text-muted-foreground">
+            Customers can fill out the quotation form at this URL. Their submissions will appear in the Request for Quotation page.
           </p>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Button variant="secondary" onClick={() => setSrc(getDemoSrc())}>
-            Demo fill
+        <div className="flex items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+          <code className="flex-1 text-sm font-mono text-foreground truncate">
+            /quote
+          </code>
+          <Button variant="outline" size="sm" onClick={handleCopy} className="shrink-0">
+            {copied ? (
+              <>
+                <Check className="mr-1.5 h-3.5 w-3.5" />
+                Copied
+              </>
+            ) : (
+              <>
+                <Copy className="mr-1.5 h-3.5 w-3.5" />
+                Copy URL
+              </>
+            )}
           </Button>
-          <Button variant="secondary" onClick={() => setSrc(baseSrc)}>
-            Reset
-          </Button>
-
-          <a
-            href={src}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-secondary"
-            title="Open in new tab"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Open
-          </a>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-hidden rounded-lg border border-border bg-background">
-        <iframe
-          title="Être Patisserie quotation webpage"
-          src={src}
-          className="h-full w-full"
-        />
+        <div className="flex gap-2">
+          <Button asChild>
+            <a href="/quote" target="_blank" rel="noreferrer">
+              <ExternalLink className="mr-1.5 h-4 w-4" />
+              Open Quote Page
+            </a>
+          </Button>
+        </div>
       </div>
     </div>
   )

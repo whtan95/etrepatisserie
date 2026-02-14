@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -11,7 +11,7 @@ import {
   type RequestForQuotation,
 } from "@/lib/request-for-quotation-storage"
 import { addOfficialQuotation, createOfficialQuotationFromWebRequest } from "@/lib/official-quotation-storage"
-import { ArrowLeft, FileText, Forward, Image as ImageIcon } from "lucide-react"
+import { ArrowLeft, FileText, Forward, Image as ImageIcon, RefreshCw } from "lucide-react"
 import { OrderProgress } from "@/components/portal/order-progress"
 
 function yesNo(v: boolean) {
@@ -29,11 +29,45 @@ export default function RequestForQuotationDetailPage() {
   const router = useRouter()
   const requestId = typeof params?.requestId === "string" ? decodeURIComponent(params.requestId) : ""
   const [confirmProceedOpen, setConfirmProceedOpen] = useState(false)
+  const [item, setItem] = useState<RequestForQuotation | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const item = useMemo<RequestForQuotation | null>(() => {
-    if (!requestId) return null
-    return getRequestForQuotationById(requestId)
+  const loadItem = useCallback(async () => {
+    if (!requestId) {
+      setIsLoading(false)
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      // First try localStorage
+      const localItem = getRequestForQuotationById(requestId)
+      if (localItem) {
+        setItem(localItem)
+        setIsLoading(false)
+        return
+      }
+
+      // If not in localStorage, fetch from API
+      const res = await fetch("/api/quote-request")
+      if (res.ok) {
+        const data = await res.json()
+        const requests = (data.requests ?? []) as RequestForQuotation[]
+        const found = requests.find((r) => r.id === requestId)
+        if (found) {
+          setItem(found)
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load request:", err)
+    } finally {
+      setIsLoading(false)
+    }
   }, [requestId])
+
+  useEffect(() => {
+    loadItem()
+  }, [loadItem])
 
   const proceedToOfficialQuotation = () => {
     if (!item) return
@@ -53,6 +87,14 @@ export default function RequestForQuotationDetailPage() {
     router.push(`/portal/quotation/official-quotation/${encodeURIComponent(official.id)}`)
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[400px] items-center justify-center">
+        <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
   if (!item) {
     return (
       <div className="space-y-4">
@@ -66,7 +108,7 @@ export default function RequestForQuotationDetailPage() {
           </Button>
         </div>
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-          Request not found in this browser&apos;s storage.
+          Request not found.
         </div>
       </div>
     )
